@@ -1,0 +1,21 @@
+
+# RichmackOS build secrets
+config/preseed/richmackos.cfg
+
+# Virtual machines / release artifacts
+*.qcow2
+*.qcow2.xz
+*.iso
+
+# Build output
+build/
+dist/
+vm/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
