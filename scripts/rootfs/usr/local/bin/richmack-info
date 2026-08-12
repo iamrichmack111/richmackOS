@@ -1,0 +1,18 @@
+#!/bin/bash
+
+echo
+echo "=========================================="
+echo "              RICHMACK OS"
+echo "=========================================="
+echo
+cat /etc/richmack-release
+echo
+echo "Kernel:       $(uname -r)"
+echo "Architecture: $(uname -m)"
+echo "Hostname:     $(hostname)"
+echo "User:         $(whoami)"
+echo "Uptime:       $(uptime -p)"
+echo "Disk:         $(df -h / | awk 'NR==2 {print $3 " / " $2}')"
+echo "Memory:       $(free -h | awk '/Mem:/ {print $3 " / " $2}')"
+echo
+echo "=========================================="

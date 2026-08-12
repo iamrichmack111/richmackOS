@@ -1,0 +1,15 @@
+#!/bin/bash
+
+export HOME=/home/wisdom
+export USER=wisdom
+export PATH="/home/wisdom/.local/bin:/usr/local/bin:/usr/bin:/bin"
+
+cd /home/wisdom
+
+while true; do
+    /usr/local/bin/richmack-os
+    clear
+    echo "RichmackOS console exited."
+    echo "Restarting..."
+    sleep 2
+done
