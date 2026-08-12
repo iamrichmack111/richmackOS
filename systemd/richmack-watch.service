@@ -1,0 +1,13 @@
+[Unit]
+Description=RichmackOS Incremental Filesystem Watcher
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/wisdom/.richmackos/watcher.py
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

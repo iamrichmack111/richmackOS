@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "${1:-}" in
+    organize)
+        shift
+        exec /usr/bin/python3 "$HOME/.richmackos/organize.py" "$@"
+        ;;
+
+    watch)
+        shift
+        exec "$HOME/.richmackos/watchctl" "$@"
+        ;;
+
+    *)
+        exec /usr/bin/python3 "$HOME/.richmackos/richmackos.py" "$@"
+        ;;
+esac

@@ -1,0 +1,264 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEFAULT_MODEL="huihui_ai/granite4.1-abliterated:3b"
+OLLAMA="http://richmack.local:11434"
+
+MODEL="$DEFAULT_MODEL"
+OUTPUT=""
+CHAT=0
+
+usage() {
+cat <<'HELP'
+Richmack AI
+
+Usage:
+  richmackai "prompt"
+  richmackai -o FILE "prompt"
+  richmackai --chat
+  richmackai --chat -o FILE
+  richmackai -m MODEL "prompt"
+  richmackai -m MODEL --chat
+
+Options:
+  -c, --chat          Interactive chat mode
+  -m, --model MODEL   Choose Ollama model
+  -o, --output FILE   Save output/transcript
+  -h, --help          Show help
+
+Chat commands:
+  /exit               Exit chat
+  /quit               Exit chat
+  /clear              Clear conversation memory
+  /model              Show current model
+HELP
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -c|--chat)
+            CHAT=1
+            shift
+            ;;
+        -m|--model)
+            MODEL="$2"
+            shift 2
+            ;;
+        -o|--output)
+            OUTPUT="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+python3 - "$OLLAMA" "$MODEL" "$CHAT" "$OUTPUT" "$@" <<'PY'
+import json
+import sys
+import urllib.request
+from pathlib import Path
+from datetime import datetime
+
+OLLAMA = sys.argv[1]
+MODEL = sys.argv[2]
+CHAT = sys.argv[3] == "1"
+OUTPUT = sys.argv[4]
+ARGS = sys.argv[5:]
+
+BOLD = "\033[1m"
+CYAN = "\033[36m"
+GREEN = "\033[32m"
+MAGENTA = "\033[35m"
+YELLOW = "\033[33m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+
+def post(endpoint, payload):
+    req = urllib.request.Request(
+        OLLAMA + endpoint,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+
+    with urllib.request.urlopen(req, timeout=300) as r:
+        return json.loads(r.read())
+
+
+def save(text):
+    if not OUTPUT:
+        return
+
+    path = Path(OUTPUT).expanduser()
+
+    with path.open("a", encoding="utf-8") as f:
+        f.write(text)
+
+        if not text.endswith("\n"):
+            f.write("\n")
+
+
+def one_shot(prompt):
+    data = post(
+        "/api/generate",
+        {
+            "model": MODEL,
+            "prompt": prompt,
+            "stream": False,
+            "keep_alive": "24h",
+        },
+    )
+
+    answer = data.get("response", "").strip()
+
+    print(f"{BOLD}{CYAN}{answer}{RESET}")
+
+    if OUTPUT:
+        Path(OUTPUT).expanduser().write_text(
+            answer + "\n",
+            encoding="utf-8",
+        )
+
+        print(
+            f"{GRAY}Saved: "
+            f"{Path(OUTPUT).expanduser()}{RESET}"
+        )
+
+
+def chat():
+    messages = []
+
+    print(
+        f"{BOLD}{MAGENTA}"
+        f"Richmack AI Chat"
+        f"{RESET}"
+    )
+
+    print(
+        f"{GRAY}"
+        f"Model: {MODEL}"
+        f"{RESET}"
+    )
+
+    print(
+        f"{GRAY}"
+        f"Commands: /clear /model /exit"
+        f"{RESET}\n"
+    )
+
+    if OUTPUT:
+        save(
+            "\n"
+            "========================================\n"
+            f"Richmack AI Chat - {datetime.now().isoformat()}\n"
+            f"Model: {MODEL}\n"
+            "========================================\n"
+        )
+
+    while True:
+        try:
+            prompt = input(
+                f"{BOLD}{GREEN}You › {RESET}"
+            ).strip()
+
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not prompt:
+            continue
+
+        if prompt in {"/exit", "/quit"}:
+            break
+
+        if prompt == "/clear":
+            messages.clear()
+
+            print(
+                f"{YELLOW}"
+                f"Conversation cleared."
+                f"{RESET}"
+            )
+
+            continue
+
+        if prompt == "/model":
+            print(
+                f"{MAGENTA}"
+                f"{MODEL}"
+                f"{RESET}"
+            )
+
+            continue
+
+        messages.append(
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        )
+
+        data = post(
+            "/api/chat",
+            {
+                "model": MODEL,
+                "messages": messages,
+                "stream": False,
+                "keep_alive": "24h",
+            },
+        )
+
+        message = data.get("message", {})
+        answer = message.get("content", "").strip()
+
+        messages.append(
+            {
+                "role": "assistant",
+                "content": answer,
+            }
+        )
+
+        print(
+            f"\n{BOLD}{CYAN}"
+            f"RichmackAI › {answer}"
+            f"{RESET}\n"
+        )
+
+        if OUTPUT:
+            save(
+                f"\nYou:\n{prompt}\n\n"
+                f"RichmackAI:\n{answer}\n"
+            )
+
+    if OUTPUT:
+        print(
+            f"{GRAY}"
+            f"Transcript saved: "
+            f"{Path(OUTPUT).expanduser()}"
+            f"{RESET}"
+        )
+
+
+if CHAT:
+    chat()
+else:
+    if not ARGS:
+        print("Usage: richmackai \"prompt\"")
+        raise SystemExit(1)
+
+    one_shot(" ".join(ARGS))
+PY
