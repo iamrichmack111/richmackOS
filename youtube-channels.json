@@ -1,0 +1,30 @@
+{
+  "danny-jones": {
+    "name": "Danny Jones",
+    "url": "https://www.youtube.com/@dannyjones/videos"
+  },
+  "tim-ferriss": {
+    "name": "Tim Ferriss",
+    "url": "https://www.youtube.com/timferriss/videos"
+  },
+  "poetik-flakko": {
+    "name": "Poetik Flakko",
+    "url": "https://www.youtube.com/@PoetikFlakko/videos"
+  },
+  "vladtv": {
+    "name": "VladTV",
+    "url": "https://www.youtube.com/@vladtv/videos"
+  },
+  "fireship": {
+    "name": "Fireship",
+    "url": "https://www.youtube.com/@Fireship/videos"
+  },
+  "esoterica": {
+    "name": "ESOTERICA",
+    "url": "https://www.youtube.com/@TheEsotericaChannel/videos"
+  },
+  "chill-dude-explains": {
+    "name": "Chill Dude Explains",
+    "url": "https://www.youtube.com/@ChillDudeExplains/videos"
+  }
+}

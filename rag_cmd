@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+for ARG in "$@"; do
+    if [ "$ARG" = "--scope" ]; then
+        exec /usr/bin/python3 \
+            "$HOME/.richmackos/rag_scope.py" \
+            "$@"
+    fi
+done
+
+exec richmackrag ask "$@"
