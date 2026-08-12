@@ -15,6 +15,26 @@ OLLAMA = "http://richmack.local:11434"
 MODEL = "gemma3:4b"
 
 RESET   = "\033[0m"
+
+def progress(label, percent, width=30):
+    percent = max(0, min(100, int(percent)))
+    filled = int(width * percent / 100)
+
+    bar = (
+        "█" * filled
+        + "░" * (width - filled)
+    )
+
+    print(
+        f"\r{label:<22} {bar} {percent:3d}%",
+        end="",
+        flush=True
+    )
+
+    if percent >= 100:
+        print()
+
+
 BOLD    = "\033[1m"
 CYAN    = "\033[36m"
 GREEN   = "\033[32m"
@@ -140,6 +160,8 @@ def read_transcripts(files, max_chars=50000):
 
 
 def summarize_channel(key, config, days=None, limit=None):
+    progress("Preparing channel", 10)
+
     channel_dir = find_channel_dir(
         config["name"]
     )
@@ -270,6 +292,10 @@ TRANSCRIPTS:
 {corpus}
 """
 
+    progress("Reading transcripts", 30)
+    progress("Building prompt", 45)
+    progress("Generating summary", 70)
+
     data = post({
         "model": MODEL,
         "prompt": prompt,
@@ -280,6 +306,8 @@ TRANSCRIPTS:
         "response",
         ""
     ).strip()
+
+    progress("Summary complete", 100)
 
     print()
     print(
@@ -304,6 +332,66 @@ TRANSCRIPTS:
         f"{RESET}"
     )
 
+    return answer
+
+
+def combined_summary(channel_results, model):
+    if not channel_results:
+        return
+
+    joined = "\n\n".join(
+        f"CHANNEL: {name}\nSUMMARY:\n{text}"
+        for name, text in channel_results
+    )
+
+    prompt = f"""
+Create one detailed cross-channel YouTube briefing.
+
+Use only the supplied channel summaries.
+
+Include:
+
+OVERALL THEMES
+CROSS-CHANNEL CONNECTIONS
+MAJOR DIFFERENCES
+KEYWORDS
+TAGS
+PEOPLE / ORGANIZATIONS / RESOURCES MENTIONED
+THINGS TO LOOK UP
+NOTABLE CLAIMS
+PRACTICAL TAKEAWAYS
+
+Be detailed.
+Do not ask follow-up questions.
+
+CHANNEL SUMMARIES:
+
+{joined}
+"""
+
+    progress("Combining channels", 20)
+    progress("Building combined", 45)
+    progress("Generating combined", 70)
+
+    data = post({
+        "model": model,
+        "prompt": prompt,
+        "stream": False
+    })
+
+    answer = data.get(
+        "response",
+        ""
+    ).strip()
+
+    progress("Combined complete", 100)
+
+    print()
+    print("╭─ ALL CHANNELS COMBINED SUMMARY ─")
+    print(answer)
+    print("╰─────────────────────────────────")
+
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -324,6 +412,12 @@ def main():
     )
 
     parser.add_argument(
+        "--combined",
+        action="store_true",
+        help="After --all, create one combined cross-channel summary"
+    )
+
+    parser.add_argument(
         "--days",
         type=int,
         help="Only include transcripts from the last N days"
@@ -340,13 +434,27 @@ def main():
     channels = load_channels()
 
     if args.all:
+        channel_results = []
+
         for key, config in channels.items():
-            summarize_channel(
+            result = summarize_channel(
                 key,
                 config,
                 days=args.days,
                 limit=args.limit
             )
+
+            if isinstance(result, str) and result.strip():
+                channel_results.append(
+                    (config["name"], result)
+                )
+
+        if args.combined:
+            combined_summary(
+                channel_results,
+                MODEL
+            )
+
         return
 
     if not args.channel:

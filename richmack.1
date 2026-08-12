@@ -662,3 +662,605 @@ The current RAG implementation directly reads text-based files.
 Future PDF support can use
 .BR pdftotext (1)
 before chunking and embedding.
+
+.SH YOUTUBE KNOWLEDGE INGESTION
+
+.TP
+.B richmack youtube channels
+List configured YouTube channels.
+
+.TP
+.B richmack youtube sync
+Download and clean subtitles for recent videos from configured channels.
+
+The default limit is ten videos per channel.
+
+.TP
+.B richmack youtube sync --limit N
+Set the number of recent videos inspected per channel.
+
+.TP
+.B richmack youtube sync --channel CHANNEL
+Sync one configured channel.
+
+.TP
+.B richmack youtube status
+Display YouTube ingestion state.
+
+.TP
+.B richmack youtube search QUERY
+Search locally stored transcript text.
+
+Clean transcripts are stored under:
+
+.EX
+~/Knowledge-Inbox/YouTube
+.EE
+
+The filesystem watcher automatically submits new transcript text files to
+RichmackRAG. Embeddings are generated remotely by richmack.local.
+
+The ingestion workflow is:
+
+.EX
+YouTube
+  |
+yt-dlp
+  |
+VTT subtitles
+  |
+clean text
+  |
+Knowledge-Inbox
+  |
+watcher
+  |
+RichmackRAG
+  |
+remote embeddings
+  |
+query with richmack rag
+.EE
+
+.SH RAG NAMESPACES
+
+RichmackOS supports scoped RAG retrieval.
+
+Unscoped behavior remains available:
+
+.EX
+richmack rag "QUESTION"
+.EE
+
+A scope can be selected with:
+
+.EX
+richmack rag --scope SCOPE "QUESTION"
+.EE
+
+Supported scopes include:
+
+.EX
+all
+youtube
+docs
+projects
+system
+.EE
+
+Examples:
+
+.EX
+richmack rag --scope youtube \
+    "What do my YouTube transcripts say about robotics?"
+
+richmack rag --scope docs \
+    "What do my documents say about IAM?"
+
+richmack rag --scope projects \
+    "How is RichmackOS organized?"
+
+richmack rag --scope system \
+    "What CPU does this server use?"
+.EE
+
+Scoped retrieval reduces unrelated-document contamination.
+
+.SH YOUTUBE QUERY FILTERS
+
+.TP
+.B richmack youtube ask CHANNEL --latest QUESTION
+Query only the newest transcript for a channel.
+
+.TP
+.B richmack youtube ask CHANNEL --days N QUESTION
+Query transcripts uploaded during the last N days.
+
+.TP
+.B richmack youtube ask CHANNEL --since YYYY-MM-DD QUESTION
+Query transcripts uploaded on or after the specified date.
+
+.TP
+.B richmack youtube ask CHANNEL --video VIDEO_ID QUESTION
+Query one specific YouTube transcript.
+
+Examples:
+
+.EX
+richmack youtube ask fireship --latest \
+    "What did this video discuss?"
+
+richmack youtube ask danny-jones --days 30 \
+    "What topics came up most often?"
+
+richmack youtube ask tim-ferriss --since 2026-08-01 \
+    "What themes were discussed?"
+.EE
+
+YouTube filters are applied before semantic retrieval so unrelated channel
+transcripts are not considered.
+
+.SH RESEARCH OUTPUT EMBEDDING
+
+YouTube Research Mode stores derived research artifacts under:
+
+.EX
+~/Knowledge/Research/youtube/CHANNEL/
+.EE
+
+Each run produces:
+
+.EX
+YYYY-MM-DD_HHMMSS.md
+YYYY-MM-DD_HHMMSS.json
+latest.md
+latest.json
+.EE
+
+The RichmackOS filesystem watcher recursively monitors the home directory.
+
+Because Markdown and JSON are supported automatic RAG file types, research
+artifacts are automatically submitted to:
+
+.EX
+richmackrag index FILE
+.EE
+
+This produces two searchable knowledge layers:
+
+.EX
+raw YouTube transcript
+        |
+        v
+RAG embedding
+
+derived research brief
+        |
+        v
+RAG embedding
+.EE
+
+The raw transcript should be treated as the original source.
+
+Generated Markdown and JSON research files are derived summaries and
+extracted knowledge produced by the configured language model.
+
+.SH YOUTUBE RESEARCH WORKFLOW
+
+The full YouTube research pipeline is:
+
+.EX
+YouTube channel
+      |
+      v
+yt-dlp
+      |
+      v
+subtitle download
+      |
+      v
+VTT cleanup
+      |
+      v
+plain transcript
+      |
+      v
+~/Knowledge-Inbox/YouTube/
+      |
+      v
+watcher
+      |
+      v
+RichmackRAG embedding
+      |
+      v
+richmack youtube research
+      |
+      +----> summary pass
+      |
+      +----> extraction pass
+      |
+      +----> research pass
+      |
+      v
+Markdown + JSON
+      |
+      v
+~/Knowledge/Research/youtube/
+      |
+      v
+watcher
+      |
+      v
+RichmackRAG embedding
+.EE
+
+.SH YOUTUBE RESEARCH COMMANDS
+
+Research the latest three transcripts for one channel:
+
+.EX
+richmack youtube research chill-dude-explains --limit 3
+.EE
+
+Research all configured channels:
+
+.EX
+richmack youtube research --all --limit 3
+.EE
+
+Use a specific model:
+
+.EX
+richmack youtube research chill-dude-explains \
+    --limit 3 \
+    --model gemma3:4b
+.EE
+
+Research only recent videos:
+
+.EX
+richmack youtube research danny-jones \
+    --days 30 \
+    --limit 10
+.EE
+
+.SH YOUTUBE KNOWLEDGE LAYERS
+
+RichmackOS distinguishes between:
+
+.TP
+.B Raw transcripts
+Original cleaned subtitle text downloaded from YouTube.
+
+.TP
+.B Research briefs
+Model-generated summaries, keywords, tags, resources, claims,
+research queries, people, organizations, and concept relationships.
+
+Both may be embedded into RichmackRAG, but only the raw transcript should
+be considered the original source record.
+
+.SH YOUTUBE MULTI-PASS RESEARCH
+
+RichmackOS YouTube Research Mode uses several focused model passes instead
+of asking one model response to perform every extraction task.
+
+The pipeline is:
+
+.EX
+transcripts
+    |
+direct URL extraction
+    |
+summary pass
+    |
+keyword pass
+    |
+entity pass
+    |
+resource pass
+    |
+research pass
+    |
+merge
+    |
+final JSON + Markdown
+.EE
+
+Run research on one channel:
+
+.EX
+richmack youtube research chill-dude-explains --limit 3
+.EE
+
+Run research on every configured channel:
+
+.EX
+richmack youtube research --all --limit 3
+.EE
+
+The default research model is:
+
+.EX
+gemma3:4b
+.EE
+
+A model may be overridden with:
+
+.EX
+richmack youtube research fireship \
+    --limit 3 \
+    --model MODEL
+.EE
+
+Research run fragments are stored beneath:
+
+.EX
+~/Knowledge/Research/youtube/CHANNEL/runs/TIMESTAMP/
+.EE
+
+Each run contains:
+
+.EX
+summary.json
+keywords.json
+entities.json
+resources.json
+research.json
+final.json
+final.md
+.EE
+
+The most recent combined result is also stored as:
+
+.EX
+~/Knowledge/Research/youtube/CHANNEL/latest.json
+~/Knowledge/Research/youtube/CHANNEL/latest.md
+.EE
+
+.SH YOUTUBE RESOURCE EXTRACTION
+
+Extract resources from recent channel transcripts:
+
+.EX
+richmack youtube resources chill-dude-explains --limit 3
+.EE
+
+Resource extraction includes both deterministic URL discovery and a focused
+language-model resource analysis.
+
+Potential resource types include websites, books, studies, tools, apps,
+courses, organizations, training programs, named procedures, legal doctrines,
+medical techniques, psychological techniques, research institutions, and
+frameworks.
+
+Explicit URLs are extracted directly from source text before model analysis.
+
+The language model is instructed never to invent missing URLs.
+
+The latest resource extraction is stored under:
+
+.EX
+~/Knowledge/Research/youtube/CHANNEL/resources-latest.json
+.EE
+
+.SH YOUTUBE
+
+RichmackOS provides YouTube subtitle ingestion, transcript storage, automatic
+RAG indexing, scoped queries, summaries, combined briefings, and interactive
+chat.
+
+.SH YOUTUBE CHANNEL MANAGEMENT
+
+List configured channels:
+
+.EX
+richmack youtube channels
+.EE
+
+Add a channel:
+
+.EX
+richmack youtube add-channel \
+    CHANNEL_KEY \
+    "DISPLAY NAME" \
+    "YOUTUBE URL"
+.EE
+
+Example:
+
+.EX
+richmack youtube add-channel \
+    renaissance-periodization \
+    "Renaissance Periodization" \
+    "https://www.youtube.com/@RenaissancePeriodization/videos"
+.EE
+
+Remove a channel:
+
+.EX
+richmack youtube remove-channel CHANNEL_KEY
+.EE
+
+Channel configuration is stored in:
+
+.EX
+~/.richmackos/youtube-channels.json
+.EE
+
+.SH YOUTUBE SYNCHRONIZATION
+
+Synchronize recent videos from every configured channel:
+
+.EX
+richmack youtube sync --limit 3
+.EE
+
+Synchronize one channel:
+
+.EX
+richmack youtube sync \
+    --channel fireship \
+    --limit 3
+.EE
+
+RichmackOS uses yt-dlp to retrieve subtitles or automatic subtitles.
+
+Subtitle data is cleaned and saved as plain text beneath:
+
+.EX
+~/Knowledge-Inbox/YouTube/
+.EE
+
+Previously ingested video IDs are tracked so future runs can skip duplicate
+work.
+
+.SH YOUTUBE AUTOMATIC RAG INDEXING
+
+New transcript text files are automatically detected by the RichmackOS
+filesystem watcher.
+
+The ingestion path is:
+
+.EX
+YouTube
+   |
+yt-dlp
+   |
+VTT subtitles
+   |
+clean text
+   |
+Knowledge-Inbox
+   |
+filesystem watcher
+   |
+RichmackRAG
+   |
+embedding API on richmack.local
+   |
+local vector database
+.EE
+
+Embedding generation is performed remotely through Ollama on richmack.local.
+
+.SH YOUTUBE SEARCH
+
+Search locally stored transcript text:
+
+.EX
+richmack youtube search QUERY
+.EE
+
+.SH YOUTUBE ASK
+
+Ask a RAG-grounded question about one configured channel:
+
+.EX
+richmack youtube ask fireship \
+    "What programming topics are discussed?"
+.EE
+
+Restrict retrieval to the newest transcript:
+
+.EX
+richmack youtube ask fireship \
+    --latest \
+    "What did this video discuss?"
+.EE
+
+Channel-scoped retrieval prevents unrelated documents from entering the
+YouTube answer context.
+
+.SH YOUTUBE SUMMARIES
+
+Summarize recent transcripts for one channel:
+
+.EX
+richmack youtube summarize \
+    chill-dude-explains \
+    --limit 3
+.EE
+
+Summarize all configured channels:
+
+.EX
+richmack youtube summarize \
+    --all \
+    --limit 3
+.EE
+
+The default summarizer model is:
+
+.EX
+gemma3:4b
+.EE
+
+The summarizer displays terminal progress while preparing and generating the
+report.
+
+.SH YOUTUBE COMBINED SUMMARY
+
+Generate individual channel summaries followed by one cross-channel briefing:
+
+.EX
+richmack youtube summarize \
+    --all \
+    --limit 3 \
+    --combined
+.EE
+
+The combined briefing can synthesize themes, differences, keywords, tags,
+people, organizations, resources, research leads, claims, and practical
+takeaways.
+
+.SH YOUTUBE CHAT
+
+Open an interactive YouTube chat for one channel:
+
+.EX
+richmack youtube chat chill-dude-explains
+.EE
+
+Open an interactive chat across all configured channels:
+
+.EX
+richmack youtube chat --all
+.EE
+
+The chat maintains conversational history within the session.
+
+Interactive commands include:
+
+.EX
+/clear
+/quit
+.EE
+
+A terminal progress bar is displayed while the model is generating an answer.
+
+The default chat model is:
+
+.EX
+gemma3:4b
+.EE
+
+YouTube source material is treated as untrusted content rather than executable
+instructions.
+
+.SH YOUTUBE WORKFLOW
+
+A typical workflow is:
+
+.EX
+1. richmack youtube add-channel KEY "NAME" URL
+2. richmack youtube sync --limit 3
+3. richmack youtube summarize CHANNEL --limit 3
+4. richmack youtube summarize --all --limit 3 --combined
+5. richmack youtube ask CHANNEL "QUESTION"
+6. richmack youtube chat CHANNEL
+.EE
+
+The experimental multi-pass research subsystem is not part of the active
+YouTube workflow.
