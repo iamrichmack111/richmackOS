@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "${1:-status}" in
+    start)
+        systemctl --user daemon-reload
+        systemctl --user enable --now richmack-watch.service
+        echo
+        systemctl --user --no-pager --full status richmack-watch.service || true
+        ;;
+
+    stop)
+        systemctl --user stop richmack-watch.service
+        echo "RichmackOS watcher stopped."
+        ;;
+
+    restart)
+        systemctl --user daemon-reload
+        systemctl --user restart richmack-watch.service
+        echo
+        systemctl --user --no-pager --full status richmack-watch.service || true
+        ;;
+
+    status)
+        systemctl --user --no-pager --full status richmack-watch.service || true
+        ;;
+
+    log|logs)
+        journalctl --user \
+            -u richmack-watch.service \
+            -n 100 \
+            --no-pager
+        ;;
+
+    follow)
+        journalctl --user \
+            -u richmack-watch.service \
+            -f
+        ;;
+
+    *)
+        cat <<HELP
+Usage:
+  richmack watch start
+  richmack watch stop
+  richmack watch restart
+  richmack watch status
+  richmack watch log
+  richmack watch follow
+HELP
+        exit 1
+        ;;
+esac

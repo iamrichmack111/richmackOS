@@ -1,0 +1,10 @@
+RichmackOS RAG Plugin
+
+Backend:
+richmackrag
+
+Embeddings:
+nomic-embed-text on richmack.local
+
+Generation:
+Granite on richmack.local

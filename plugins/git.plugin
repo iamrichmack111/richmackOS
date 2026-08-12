@@ -1,0 +1,8 @@
+RichmackOS Git Plugin
+
+Capabilities:
+- repository discovery
+- branch detection
+- dirty repository detection
+- remote URL discovery
+- last commit inspection

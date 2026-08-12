@@ -1,0 +1,664 @@
+.TH RICHMACK 1 "August 2026" "RichmackOS v0.1" "User Commands"
+.SH NAME
+richmack \- terminal-first personal computing assistant
+.SH SYNOPSIS
+.B richmack
+.I COMMAND
+.RI [ ARGUMENTS ]
+
+.SH DESCRIPTION
+.B RichmackOS
+is a lightweight Linux personal computing assistant.
+
+It performs deterministic filesystem, project, search, memory, duplicate,
+documentation, and retrieval tasks locally while delegating expensive AI
+inference and embeddings to an Ollama server running at:
+
+.EX
+http://richmack.local:11434
+.EE
+
+The Debian server does not need to run a local LLM.
+
+.SH COMMANDS
+
+.SS System
+
+.TP
+.B richmack status
+Show system status including hostname, uptime, RAM, disk, indexed files,
+projects, memories, AI server state, model count, and RAG availability.
+
+.TP
+.B richmack doctor
+Check required commands and connectivity to richmack.local.
+
+.SS Indexing and Search
+
+.TP
+.B richmack scan PATH
+Scan a directory and update the local SQLite file and project index.
+
+Example:
+
+.EX
+richmack scan ~
+.EE
+
+.TP
+.B richmack search QUERY
+Search indexed filenames and paths.
+
+Example:
+
+.EX
+richmack search kubernetes
+.EE
+
+.TP
+.B richmack large
+Show the largest indexed files.
+
+.TP
+.B richmack duplicates
+Find exact duplicate files using size comparison followed by SHA-256.
+
+No files are automatically deleted.
+
+.SS Git Projects
+
+.TP
+.B richmack repos
+List indexed Git repositories with stack, branch, dirty state, remote,
+and last commit date.
+
+.SS Memory
+
+.TP
+.B richmack remember TEXT
+Store a local memory.
+
+Example:
+
+.EX
+richmack remember "The Debian server stores the RAG database."
+.EE
+
+.TP
+.B richmack memories
+List stored memories.
+
+.TP
+.B richmack recall QUERY
+Search stored memories.
+
+.TP
+.B richmack forget ID
+Delete a stored memory by ID.
+
+.SS Skills
+
+.TP
+.B richmack skill add NAME COMMAND
+Create a reusable shell skill.
+
+Example:
+
+.EX
+richmack skill add diskfree "df -h"
+.EE
+
+.TP
+.B richmack skill list
+List stored skills.
+
+.TP
+.B richmack skill show NAME
+Display the command associated with a skill.
+
+.TP
+.B richmack skill run NAME
+Run a skill after interactive confirmation.
+
+.SS Plugins
+
+.TP
+.B richmack plugins
+List files in the RichmackOS plugin directory.
+
+Plugins are stored in:
+
+.EX
+~/.richmackos/plugins
+.EE
+
+.SS AI
+
+.TP
+.B richmack ai QUESTION
+Ask a one-shot question through RichmackAI.
+
+Example:
+
+.EX
+richmack ai "Explain systemd."
+.EE
+
+.TP
+.B richmack chat
+Start interactive RichmackAI chat.
+
+The underlying command is:
+
+.EX
+richmackai --chat
+.EE
+
+RichmackAI supports model selection and saving output.
+
+Examples:
+
+.EX
+richmackai -m gemma2:2b --chat
+richmackai -o ~/answer.txt "Explain chmod 755."
+richmackai --chat -o ~/chat.txt
+.EE
+
+.SS RAG
+
+.TP
+.B richmack rag QUESTION
+Ask a question against the indexed Richmack RAG knowledge base.
+
+Example:
+
+.EX
+richmack rag "What CPU does this computer have?"
+.EE
+
+The underlying command is:
+
+.EX
+richmackrag ask QUESTION
+.EE
+
+Richmack RAG stores source documents, text chunks, vectors, and SQLite
+metadata on the Debian server.
+
+Embedding and generation are handled remotely by richmack.local.
+
+.TP
+.B richmackrag index PATH
+Index a file or directory.
+
+.TP
+.B richmackrag search QUESTION
+Show the most relevant retrieved chunks.
+
+.TP
+.B richmackrag stats
+Show RAG database statistics.
+
+RAG answers include references and an Evidence Match score.
+
+Evidence Match measures retrieval relevance and is not a guarantee of
+factual accuracy.
+
+.SS Documentation
+
+.TP
+.B richmack readme PATH
+Generate a project README using the remote LLM.
+
+Example:
+
+.EX
+richmack readme .
+.EE
+
+Generated files are stored under:
+
+.EX
+~/Readme/PROJECT_NAME/README.md
+.EE
+
+.SH ARCHITECTURE
+
+.EX
+Debian Server
+|
++-- Filesystem index
++-- SQLite
++-- Project catalog
++-- Memory
++-- Skills
++-- Plugins
++-- RAG retrieval
+|
++------ LAN ------> richmack.local:11434
+                    |
+                    +-- Ollama
+                    +-- Granite
+                    +-- Nomic embeddings
+.EE
+
+.SH FILES
+
+.TP
+.I ~/.richmackos/richmackos.py
+Main RichmackOS application.
+
+.TP
+.I ~/.richmackos/richmackos.db
+Main SQLite database.
+
+.TP
+.I ~/.richmackos/plugins
+Plugin directory.
+
+.TP
+.I ~/.richmackos/skills
+Stored skills.
+
+.TP
+.I ~/.richmack-rag/rag.py
+RAG application.
+
+.TP
+.I ~/.richmack-rag/rag.db
+RAG SQLite database.
+
+.TP
+.I ~/Readme/RichmackOS/README.md
+RichmackOS README.
+
+.TP
+.I /usr/local/bin/richmack
+Main command.
+
+.TP
+.I /usr/local/bin/richmackai
+Remote Ollama chat client.
+
+.TP
+.I /usr/local/bin/richmackrag
+RAG command.
+
+.SH SHORTCUT COMMANDS
+
+.EX
+richmacksys
+richmackindex
+richmacksearch
+richmackgit
+richmackmem
+richmackdoc
+richmackskill
+richmackplugins
+.EE
+
+.SH DEFAULT MODELS
+
+Generation:
+
+.EX
+huihui_ai/granite4.1-abliterated:3b
+.EE
+
+Embeddings:
+
+.EX
+nomic-embed-text
+.EE
+
+Both run remotely on the Richmack Ollama server.
+
+.SH SECURITY
+
+RichmackOS prefers deterministic Linux tools when possible.
+
+Scanning does not automatically move or delete files.
+
+Duplicate detection does not delete files.
+
+Stored shell skills require confirmation before execution.
+
+The Ollama API should only be exposed to trusted systems on the local network.
+
+.SH VERSION
+
+RichmackOS v0.1
+
+.SH SEE ALSO
+
+.BR git (1),
+.BR find (1),
+.BR sha256sum (1),
+.BR sqlite3 (1),
+.BR curl (1)
+
+.SH AUTHOR
+
+RichmackOS
+
+.SH ORGANIZATION LOGGING AND UNDO
+
+.TP
+.B richmack organize --logs
+List successful organization move logs.
+
+Logs are stored under:
+
+.EX
+~/.richmackos/organize-logs/
+.EE
+
+.TP
+.B richmack organize --undo-last
+Reverse the most recent successful organization run.
+
+RichmackOS first verifies that all destination files still exist and that
+none of the original source paths are occupied.
+
+The user must type:
+
+.EX
+UNDO
+.EE
+
+before restoration occurs.
+
+After successful restoration, the move log is renamed with a
+.B .undone
+extension.
+
+.SH ORGANIZATION LOGGING AND UNDO
+
+.TP
+.B richmack organize --logs
+List successful organization move logs.
+
+Logs are stored under:
+
+.EX
+~/.richmackos/organize-logs/
+.EE
+
+.TP
+.B richmack organize --undo-last
+Reverse the most recent successful organization run.
+
+RichmackOS first verifies that all destination files still exist and that
+none of the original source paths are occupied.
+
+The user must type:
+
+.EX
+UNDO
+.EE
+
+before restoration occurs.
+
+After successful restoration, the move log is renamed with a
+.B .undone
+extension.
+
+.SH FILESYSTEM WATCHER
+
+.TP
+.B richmack watch start
+Start and enable the incremental RichmackOS filesystem watcher.
+
+.TP
+.B richmack watch stop
+Stop the watcher.
+
+.TP
+.B richmack watch restart
+Restart the watcher.
+
+.TP
+.B richmack watch status
+Display systemd status for the watcher.
+
+.TP
+.B richmack watch log
+Display recent watcher events.
+
+.TP
+.B richmack watch follow
+Follow watcher events live through the systemd journal.
+
+The watcher uses Linux inotify and updates the RichmackOS SQLite file index
+incrementally.
+
+The watcher does not move, rename, or delete user files.
+
+High-churn and sensitive directories such as .git, .cache, .ssh, .config,
+node_modules, virtual environments, and RichmackOS internal directories are
+excluded.
+
+The service name is:
+
+.EX
+richmack-watch.service
+.EE
+
+.SH AUTOMATIC RAG INDEXING
+
+The RichmackOS filesystem watcher automatically sends supported changed
+documents to the Richmack RAG index.
+
+Supported extensions include:
+
+.EX
+.txt
+.md
+.markdown
+.rst
+.csv
+.json
+.yaml
+.yml
+.html
+.EE
+
+When a supported file is created or modified, RichmackOS first updates the
+filesystem SQLite index and then executes:
+
+.EX
+richmackrag index FILE
+.EE
+
+Embedding computation is performed remotely through the Ollama service on
+richmack.local.
+
+PDF files are not automatically indexed until PDF text extraction support is
+enabled.
+
+.SH KNOWLEDGE INBOX
+
+RichmackOS uses the following recommended directory for automatic document
+ingestion:
+
+.EX
+~/Knowledge-Inbox
+.EE
+
+Documents placed in this directory are detected by the incremental
+filesystem watcher.
+
+Supported text-based documents are automatically submitted to
+.B richmackrag
+for indexing.
+
+Supported automatic extensions currently include:
+
+.EX
+.txt
+.md
+.markdown
+.rst
+.csv
+.json
+.yaml
+.yml
+.html
+.EE
+
+.SH DOCUMENT INGESTION WORKFLOW
+
+The normal workflow is:
+
+.EX
+Remote Computer
+      |
+      | scp / rsync
+      v
+~/Knowledge-Inbox
+      |
+      v
+inotify watcher
+      |
+      +----> RichmackOS filesystem SQLite index
+      |
+      v
+richmackrag index
+      |
+      v
+text chunks
+      |
+      v
+richmack.local embedding API
+      |
+      v
+vectors stored on Debian
+      |
+      v
+richmack rag QUESTION
+      |
+      v
+Granite response with references
+.EE
+
+.SH SENDING DOCUMENTS
+
+From another machine, a document can be copied to the Debian server with:
+
+.EX
+scp ~/Desktop/aws-notes.txt \
+    wisdom@192.168.1.78:~/Knowledge-Inbox/
+.EE
+
+Multiple files:
+
+.EX
+scp ~/Documents/*.txt \
+    wisdom@192.168.1.78:~/Knowledge-Inbox/
+.EE
+
+A directory:
+
+.EX
+scp -r ~/Documents/DevOps \
+    wisdom@192.168.1.78:~/Knowledge-Inbox/
+.EE
+
+For repeated synchronization, use rsync:
+
+.EX
+rsync -av \
+    ~/Documents/DevOps/ \
+    wisdom@192.168.1.78:~/Knowledge-Inbox/DevOps/
+.EE
+
+.SH VERIFYING AUTOMATIC INDEXING
+
+View watcher activity:
+
+.EX
+richmack watch log
+.EE
+
+Search the normal file index:
+
+.EX
+richmack search aws-notes
+.EE
+
+View RAG statistics:
+
+.EX
+richmackrag stats
+.EE
+
+Inspect semantic retrieval:
+
+.EX
+richmackrag search "IAM permissions"
+.EE
+
+Ask the indexed document collection:
+
+.EX
+richmack rag "What do my documents say about IAM permissions?"
+.EE
+
+.SH MANUAL DOCUMENT INDEXING
+
+Files already present on the server may be manually indexed with:
+
+.EX
+richmackrag index ~/Documents
+.EE
+
+or:
+
+.EX
+richmackrag index ~/Knowledge-Inbox
+.EE
+
+.SH DAILY WORKFLOW
+
+A typical RichmackOS knowledge workflow is:
+
+.EX
+1. Send documents to ~/Knowledge-Inbox
+2. Watcher detects new or changed files
+3. Filesystem metadata is updated
+4. Supported documents are RAG indexed
+5. Embeddings are generated on richmack.local
+6. Vectors remain stored on Debian
+7. Query with richmack rag
+8. Review references and Evidence Match
+.EE
+
+.SH AI AND RAG COMMANDS
+
+Use ordinary AI without document grounding:
+
+.EX
+richmack ai "Explain Linux namespaces."
+.EE
+
+Use interactive AI:
+
+.EX
+richmack chat
+.EE
+
+Use indexed documents:
+
+.EX
+richmack rag "What do my documents say about Linux namespaces?"
+.EE
+
+.SH PDF INGESTION
+
+PDF files are not yet automatically ingested into the RAG database.
+
+The current RAG implementation directly reads text-based files.
+
+Future PDF support can use
+.BR pdftotext (1)
+before chunking and embedding.
