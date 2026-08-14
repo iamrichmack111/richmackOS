@@ -7,3 +7,8 @@ __pycache__/
 *.log
 organize-logs/
 .DS_Store
+.stage*-backup-*
+.richmack-backup-*
+.pytest_cache/
+.coverage
+htmlcov/

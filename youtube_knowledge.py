@@ -574,40 +574,23 @@ def extract_ngram_phrases(text):
     return phrases
 
 
-def extract_keywords(
-    title,
-    transcript,
-    limit=40
-):
-    """
-    Richmack topic extraction.
-
-    This is deliberately NOT raw word frequency.
-
-    Ranking favors:
-      - title concepts
-      - named entities
-      - repeated multi-word phrases
-      - distinctive technical concepts
-    """
-
-    scores = Counter()
-
-    title_lower = title.lower()
-
-    # ------------------------------------------------------------------
-    # Title phrases get strong weight.
-    # ------------------------------------------------------------------
-
-    title_words = [
+def _keyword_title_words(title):
+    return [
         word
         for word in topic_tokens(title)
-        if (
-            len(
-                word.replace("'", "")
-            ) >= 3
-        )
+        if len(
+            word.replace("'", "")
+        ) >= 3
     ]
+
+
+def _score_title_keywords(
+    scores,
+    title
+):
+    title_words = _keyword_title_words(
+        title
+    )
 
     for size in (4, 3, 2):
         for i in range(
@@ -621,23 +604,17 @@ def extract_keywords(
                 )
             )
 
-            low_words = [
-                w.lower().replace("'", "")
-                for w in phrase.split()
+            words = [
+                word.lower().replace("'", "")
+                for word in phrase.split()
             ]
 
-            useful = [
-                w
-                for w in low_words
-                if w not in STOPWORDS
-            ]
+            if any(
+                word not in STOPWORDS
+                for word in words
+            ):
+                scores[phrase] += 8
 
-            if len(useful) >= 1:
-                scores[
-                    phrase
-                ] += 8
-
-    # Individual distinctive title terms.
     for word in title_words:
         low = (
             word.lower()
@@ -648,59 +625,52 @@ def extract_keywords(
             low not in STOPWORDS
             and len(low) >= 4
         ):
-            scores[
-                word
-            ] += 6
+            scores[word] += 6
 
-    # ------------------------------------------------------------------
-    # Named entities.
-    # ------------------------------------------------------------------
+
+def _score_named_keywords(
+    scores,
+    title,
+    transcript
+):
+    ignored = {
+        "the",
+        "this",
+        "that",
+        "and",
+    }
 
     for phrase in extract_named_phrases(
         title + "\n" + transcript
     ):
-        low = phrase.lower()
-
-        if low in {
-            "the",
-            "this",
-            "that",
-            "and",
-        }:
+        if phrase.lower() in ignored:
             continue
 
-        scores[
-            phrase
-        ] += 5
+        scores[phrase] += 5
 
-    # ------------------------------------------------------------------
-    # Multiword transcript phrases.
-    # ------------------------------------------------------------------
 
+def _score_ngram_keywords(
+    scores,
+    transcript
+):
     phrase_counts = Counter(
         extract_ngram_phrases(
             transcript
         )
     )
 
-    for phrase, count in (
-        phrase_counts.items()
-    ):
-        # Stronger weighting for repetition.
-        score = min(
+    for phrase, count in phrase_counts.items():
+        scores[phrase] += min(
             10,
             2 + count
         )
 
-        scores[
-            phrase
-        ] += score
 
-    # ------------------------------------------------------------------
-    # Important domain terms, even if single-word.
-    # ------------------------------------------------------------------
-
-    important_single = Counter()
+def _score_single_keywords(
+    scores,
+    transcript
+):
+    counts = Counter()
 
     for word in topic_tokens(
         transcript
@@ -716,73 +686,87 @@ def extract_keywords(
         ):
             continue
 
-        important_single[
-            word
-        ] += 1
+        counts[word] += 1
 
-    for word, count in (
-        important_single.items()
-    ):
-        # Single words need stronger evidence than phrases.
+    for word, count in counts.items():
         if count >= 2:
-            scores[
-                word
-            ] += min(
+            scores[word] += min(
                 5,
                 count
             )
 
-    # ------------------------------------------------------------------
-    # De-duplicate case-insensitively.
-    # ------------------------------------------------------------------
 
-    ranked = sorted(
+def _rank_keyword_scores(scores):
+    return sorted(
         scores.items(),
         key=lambda item: (
             item[1],
             len(item[0].split()),
-            len(item[0])
+            len(item[0]),
         ),
-        reverse=True
+        reverse=True,
     )
 
+
+def _all_stopwords(phrase):
+    words = [
+        word.lower().replace("'", "")
+        for word in phrase.split()
+    ]
+
+    return (
+        bool(words)
+        and all(
+            word in STOPWORDS
+            for word in words
+        )
+    )
+
+
+def _valid_keyword_phrase(
+    phrase,
+    seen
+):
+    if not phrase:
+        return False
+
+    if not is_good_topic(
+        phrase
+    ):
+        return False
+
+    if phrase.lower() in seen:
+        return False
+
+    if _all_stopwords(
+        phrase
+    ):
+        return False
+
+    return True
+
+
+def _select_ranked_keywords(
+    ranked,
+    limit
+):
     output = []
     seen = set()
 
-    for phrase, score in ranked:
+    for phrase, _score in ranked:
         phrase = clean_topic(
             phrase
         )
 
-        key = phrase.lower()
-
-        if not phrase:
-            continue
-
-        if not is_good_topic(
-            phrase
+        if not _valid_keyword_phrase(
+            phrase,
+            seen
         ):
             continue
 
-        if key in seen:
-            continue
-
-        # Reject phrases made entirely of stopwords.
-        words = [
-            w.lower().replace("'", "")
-            for w in phrase.split()
-        ]
-
-        if (
-            words
-            and all(
-                word in STOPWORDS
-                for word in words
-            )
-        ):
-            continue
-
-        seen.add(key)
+        seen.add(
+            phrase.lower()
+        )
 
         output.append(
             phrase
@@ -792,6 +776,58 @@ def extract_keywords(
             break
 
     return output
+
+
+def extract_keywords(
+    title,
+    transcript,
+    limit=40
+):
+    """
+    Richmack topic extraction.
+
+    Ranking favors:
+      - title concepts
+      - named entities
+      - repeated multi-word phrases
+      - distinctive technical concepts
+
+    Candidate generation, scoring, ranking and final selection
+    are kept as separate stages so each stage can be tested
+    independently.
+    """
+
+    scores = Counter()
+
+    _score_title_keywords(
+        scores,
+        title
+    )
+
+    _score_named_keywords(
+        scores,
+        title,
+        transcript
+    )
+
+    _score_ngram_keywords(
+        scores,
+        transcript
+    )
+
+    _score_single_keywords(
+        scores,
+        transcript
+    )
+
+    ranked = _rank_keyword_scores(
+        scores
+    )
+
+    return _select_ranked_keywords(
+        ranked,
+        limit
+    )
 
 
 ###############################################################################

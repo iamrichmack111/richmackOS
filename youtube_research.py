@@ -668,52 +668,55 @@ def heading(title):
     )
 
 
-def render_markdown(data):
-    lines = []
-
+def _append_named_items(
+    lines,
+    title,
+    items
+):
     lines.append(
-        f"# {data['channel']} Research Brief"
+        f"\n## {title}\n"
     )
 
+    for item in items:
+        if isinstance(
+            item,
+            dict
+        ):
+            lines.append(
+                f"- **{item.get('name', '')}** — "
+                f"{item.get('context', '')}"
+            )
+        else:
+            lines.append(
+                f"- {item}"
+            )
+
+
+def _append_simple_list(
+    lines,
+    title,
+    items,
+    code=False
+):
     lines.append(
-        f"\nGenerated: {data['generated_at']}"
+        f"\n## {title}\n"
     )
 
-    lines.append(
-        f"\nModel: `{data['model']}`"
-    )
+    for item in items:
+        if code:
+            lines.append(
+                f"- `{item}`"
+            )
+        else:
+            lines.append(
+                f"- {item}"
+            )
 
-    lines.append(
-        f"\nTranscripts analyzed: "
-        f"{len(data['source_videos'])}"
-    )
 
-    summary = data["summary"]
-    extraction = data["extraction"]
-    research = data["research"]
-
-    lines.append(
-        "\n## Channel Overview\n"
-    )
-
-    lines.append(
-        summary.get(
-            "channel_overview",
-            ""
-        )
-    )
-
-    lines.append(
-        "\n## Detailed Summary\n"
-    )
-
-    lines.append(
-        summary.get(
-            "detailed_summary",
-            ""
-        )
-    )
-
+def _append_key_themes(
+    lines,
+    summary
+):
     lines.append(
         "\n## Key Themes\n"
     )
@@ -722,7 +725,10 @@ def render_markdown(data):
         "key_themes",
         []
     ):
-        if isinstance(item, dict):
+        if isinstance(
+            item,
+            dict
+        ):
             lines.append(
                 f"- **{item.get('theme', '')}** — "
                 f"{item.get('explanation', '')}"
@@ -732,46 +738,25 @@ def render_markdown(data):
                 f"- {item}"
             )
 
-    lines.append(
-        "\n## Keywords\n"
-    )
 
-    for item in extraction.get(
-        "keywords",
-        []
-    ):
-        lines.append(
-            f"- {item}"
+def _format_tags(tags):
+    return " ".join(
+        tag
+        if str(tag).startswith("#")
+        else "#" + str(tag).replace(
+            " ",
+            "-"
         )
-
-    lines.append(
-        "\n## Tags\n"
+        for tag in tags
     )
 
-    tags = extraction.get(
-        "tags",
-        []
-    )
 
-    lines.append(
-        " ".join(
-            tag
-            if str(tag).startswith("#")
-            else "#" + str(tag).replace(
-                " ",
-                "-"
-            )
-            for tag in tags
-        )
-    )
-
+def _append_resources(
+    lines,
+    resources
+):
     lines.append(
         "\n## Resources Mentioned\n"
-    )
-
-    resources = extraction.get(
-        "resources",
-        []
     )
 
     if not resources:
@@ -790,11 +775,13 @@ def render_markdown(data):
             continue
 
         lines.append(
-            f"\n### {item.get('name', 'Unnamed resource')}"
+            f"\n### "
+            f"{item.get('name', 'Unnamed resource')}"
         )
 
         lines.append(
-            f"- **Type:** {item.get('type', '')}"
+            f"- **Type:** "
+            f"{item.get('type', '')}"
         )
 
         lines.append(
@@ -817,43 +804,12 @@ def render_markdown(data):
             f"{item.get('search_term', '')}"
         )
 
-    lines.append(
-        "\n## People\n"
-    )
 
-    for item in extraction.get(
-        "people",
-        []
-    ):
-        if isinstance(item, dict):
-            lines.append(
-                f"- **{item.get('name', '')}** — "
-                f"{item.get('context', '')}"
-            )
-        else:
-            lines.append(
-                f"- {item}"
-            )
-
-    lines.append(
-        "\n## Organizations\n"
-    )
-
-    for item in extraction.get(
-        "organizations",
-        []
-    ):
-        if isinstance(item, dict):
-            lines.append(
-                f"- **{item.get('name', '')}** — "
-                f"{item.get('context', '')}"
-            )
-        else:
-            lines.append(
-                f"- {item}"
-            )
-
-    category_sections = [
+def _append_category_sections(
+    lines,
+    extraction
+):
+    sections = (
         (
             "Books",
             "books"
@@ -882,9 +838,9 @@ def render_markdown(data):
             "Technologies",
             "technologies"
         ),
-    ]
+    )
 
-    for title, key in category_sections:
+    for title, key in sections:
         values = extraction.get(
             key,
             []
@@ -893,27 +849,17 @@ def render_markdown(data):
         if not values:
             continue
 
-        lines.append(
-            f"\n## {title}\n"
+        _append_simple_list(
+            lines,
+            title,
+            values
         )
 
-        for item in values:
-            lines.append(
-                f"- {item}"
-            )
 
-    lines.append(
-        "\n## Things To Look Up\n"
-    )
-
-    for item in research.get(
-        "research_queries",
-        []
-    ):
-        lines.append(
-            f"- `{item}`"
-        )
-
+def _append_notable_claims(
+    lines,
+    research
+):
     lines.append(
         "\n## Notable Claims\n"
     )
@@ -922,67 +868,40 @@ def render_markdown(data):
         "notable_claims",
         []
     ):
-        if isinstance(item, dict):
-            lines.append(
-                f"- **Claim:** "
-                f"{item.get('claim', '')}"
-            )
-
-            if item.get(
-                "context"
-            ):
-                lines.append(
-                    f"  - Context: "
-                    f"{item.get('context')}"
-                )
-
-            if item.get(
-                "verification_needed"
-            ):
-                lines.append(
-                    "  - Verification: independent verification recommended"
-                )
-        else:
+        if not isinstance(
+            item,
+            dict
+        ):
             lines.append(
                 f"- {item}"
             )
+            continue
 
-    lines.append(
-        "\n## Practical Takeaways\n"
-    )
-
-    for item in summary.get(
-        "practical_takeaways",
-        []
-    ):
         lines.append(
-            f"- {item}"
+            f"- **Claim:** "
+            f"{item.get('claim', '')}"
         )
 
-    lines.append(
-        "\n## Questions Raised\n"
-    )
+        if item.get(
+            "context"
+        ):
+            lines.append(
+                f"  - Context: "
+                f"{item.get('context')}"
+            )
 
-    for item in research.get(
-        "questions_raised",
-        []
-    ):
-        lines.append(
-            f"- {item}"
-        )
+        if item.get(
+            "verification_needed"
+        ):
+            lines.append(
+                "  - Verification: independent verification recommended"
+            )
 
-    lines.append(
-        "\n## Topics To Verify\n"
-    )
 
-    for item in research.get(
-        "topics_to_verify",
-        []
-    ):
-        lines.append(
-            f"- {item}"
-        )
-
+def _append_connections(
+    lines,
+    research
+):
     lines.append(
         "\n## Concept Connections\n"
     )
@@ -991,26 +910,35 @@ def render_markdown(data):
         "connections",
         []
     ):
-        if isinstance(item, dict):
-            lines.append(
-                f"- **{item.get('concept_a', '')} ↔ "
-                f"{item.get('concept_b', '')}** — "
-                f"{item.get('relationship', '')}"
-            )
+        if not isinstance(
+            item,
+            dict
+        ):
+            continue
 
+        lines.append(
+            f"- **{item.get('concept_a', '')} ↔ "
+            f"{item.get('concept_b', '')}** — "
+            f"{item.get('relationship', '')}"
+        )
+
+
+def _append_source_videos(
+    lines,
+    videos
+):
     lines.append(
         "\n## Source Videos\n"
     )
 
-    for video in data[
-        "source_videos"
-    ]:
+    for video in videos:
         lines.append(
             f"\n### {video['title']}"
         )
 
         lines.append(
-            f"- Video ID: `{video['video_id']}`"
+            f"- Video ID: "
+            f"`{video['video_id']}`"
         )
 
         lines.append(
@@ -1023,7 +951,176 @@ def render_markdown(data):
             f"{video['url'] or 'not supplied'}"
         )
 
-    return "\n".join(lines) + "\n"
+
+def _append_research_sections(
+    lines,
+    summary,
+    research
+):
+    _append_simple_list(
+        lines,
+        "Things To Look Up",
+        research.get(
+            "research_queries",
+            []
+        ),
+        code=True
+    )
+
+    _append_notable_claims(
+        lines,
+        research
+    )
+
+    _append_simple_list(
+        lines,
+        "Practical Takeaways",
+        summary.get(
+            "practical_takeaways",
+            []
+        )
+    )
+
+    _append_simple_list(
+        lines,
+        "Questions Raised",
+        research.get(
+            "questions_raised",
+            []
+        )
+    )
+
+    _append_simple_list(
+        lines,
+        "Topics To Verify",
+        research.get(
+            "topics_to_verify",
+            []
+        )
+    )
+
+    _append_connections(
+        lines,
+        research
+    )
+
+
+def render_markdown(data):
+    """
+    Render a complete channel research brief as Markdown.
+
+    Individual section renderers keep formatting behavior
+    isolated and independently testable.
+    """
+
+    lines = [
+        f"# {data['channel']} Research Brief",
+        f"\nGenerated: {data['generated_at']}",
+        f"\nModel: `{data['model']}`",
+        (
+            f"\nTranscripts analyzed: "
+            f"{len(data['source_videos'])}"
+        ),
+    ]
+
+    summary = data["summary"]
+    extraction = data["extraction"]
+    research = data["research"]
+
+    lines.append(
+        "\n## Channel Overview\n"
+    )
+
+    lines.append(
+        summary.get(
+            "channel_overview",
+            ""
+        )
+    )
+
+    lines.append(
+        "\n## Detailed Summary\n"
+    )
+
+    lines.append(
+        summary.get(
+            "detailed_summary",
+            ""
+        )
+    )
+
+    _append_key_themes(
+        lines,
+        summary
+    )
+
+    _append_simple_list(
+        lines,
+        "Keywords",
+        extraction.get(
+            "keywords",
+            []
+        )
+    )
+
+    lines.append(
+        "\n## Tags\n"
+    )
+
+    lines.append(
+        _format_tags(
+            extraction.get(
+                "tags",
+                []
+            )
+        )
+    )
+
+    _append_resources(
+        lines,
+        extraction.get(
+            "resources",
+            []
+        )
+    )
+
+    _append_named_items(
+        lines,
+        "People",
+        extraction.get(
+            "people",
+            []
+        )
+    )
+
+    _append_named_items(
+        lines,
+        "Organizations",
+        extraction.get(
+            "organizations",
+            []
+        )
+    )
+
+    _append_category_sections(
+        lines,
+        extraction
+    )
+
+    _append_research_sections(
+        lines,
+        summary,
+        research
+    )
+
+    _append_source_videos(
+        lines,
+        data["source_videos"]
+    )
+
+    return "\n".join(
+        lines
+    ) + "\n"
 
 
 ###############################################################################

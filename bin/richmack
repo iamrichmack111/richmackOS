@@ -1,4 +1,18 @@
 #!/usr/bin/env bash
+# RICHMACK_METRICS_COMMAND
+if [ "${1:-}" = "metrics" ]; then
+    shift
+
+    ROOT="$(
+        cd "$(dirname "$0")/.." &&
+        pwd
+    )"
+
+    exec python3 \
+        "$ROOT/scripts/richmack-metrics" \
+        "$@"
+fi
+# RICHMACK_METRICS_COMMAND_END
 set -euo pipefail
 
 case "${1:-}" in
