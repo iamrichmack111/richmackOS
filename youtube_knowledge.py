@@ -371,13 +371,104 @@ def normalized_topic_words(value):
     )
 
 
+TOPIC_ARTIFACT_PREFIXES = (
+    "mhm.",
+    "yeah.",
+    "uh.",
+    "um.",
+    "[laughter]",
+    "[music]",
+    "[applause]",
+)
+
+
+def _topic_word_key(word):
+    return word.replace(
+        "'",
+        ""
+    )
+
+
+def _topic_word_is_filler(
+    word
+):
+    key = _topic_word_key(
+        word
+    )
+
+    return (
+        key in TOPIC_FILLER
+        or key in STOPWORDS
+    )
+
+
+def _topic_has_only_filler(
+    words
+):
+    return all(
+        _topic_word_is_filler(
+            word
+        )
+        for word in words
+    )
+
+
+def _topic_is_short_filler_fragment(
+    words
+):
+    if not words:
+        return True
+
+    first = _topic_word_key(
+        words[0]
+    )
+
+    return (
+        first in TOPIC_FILLER
+        and len(words) <= 3
+    )
+
+
+def _topic_has_meaningful_word(
+    words
+):
+    return any(
+        (
+            _topic_word_key(word)
+            not in TOPIC_FILLER
+            and _topic_word_key(word)
+            not in STOPWORDS
+            and len(
+                _topic_word_key(word)
+            ) >= 3
+        )
+        for word in words
+    )
+
+
+def _topic_starts_with_artifact(
+    value
+):
+    low = value.lower()
+
+    return any(
+        low.startswith(
+            artifact
+        )
+        for artifact
+        in TOPIC_ARTIFACT_PREFIXES
+    )
+
+
 def is_good_topic(value):
     """
     Reject conversational fragments while preserving meaningful
     entities and technical concepts.
     """
 
-    value = clean_topic(value)
+    value = clean_topic(
+        value
+    )
 
     if not value:
         return False
@@ -389,62 +480,23 @@ def is_good_topic(value):
     if not words:
         return False
 
-    # Reject phrases composed entirely of conversational filler.
-    if all(
-        (
-            word.replace("'", "")
-            in TOPIC_FILLER
-            or word.replace("'", "")
-            in STOPWORDS
-        )
-        for word in words
+    if _topic_has_only_filler(
+        words
     ):
         return False
 
-    # Reject short filler-led fragments:
-    # "Yeah. And", "Mhm. But", "Wow", etc.
-    first = words[0].replace("'", "")
-
-    if (
-        first in TOPIC_FILLER
-        and len(words) <= 3
+    if _topic_is_short_filler_fragment(
+        words
     ):
         return False
 
-    # At least one meaningful token is required.
-    meaningful = [
-        word
-        for word in words
-        if (
-            word.replace("'", "")
-            not in TOPIC_FILLER
-            and word.replace("'", "")
-            not in STOPWORDS
-            and len(
-                word.replace("'", "")
-            ) >= 3
-        )
-    ]
-
-    if not meaningful:
+    if not _topic_has_meaningful_word(
+        words
+    ):
         return False
 
-    # Reject obvious transcript artifacts.
-    low = value.lower()
-
-    artifacts = (
-        "mhm.",
-        "yeah.",
-        "uh.",
-        "um.",
-        "[laughter]",
-        "[music]",
-        "[applause]",
-    )
-
-    if any(
-        low.startswith(item)
-        for item in artifacts
+    if _topic_starts_with_artifact(
+        value
     ):
         return False
 
