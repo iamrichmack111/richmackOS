@@ -163,7 +163,7 @@ class FrameworkCLITests(unittest.TestCase):
         )
 
         self.assertIn(
-            "Strict Learning Unit:   1",
+            "Strict LU earned:       1",
             result.stdout,
         )
 

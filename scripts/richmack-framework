@@ -16,6 +16,18 @@ if str(ROOT) not in sys.path:
     )
 
 
+from richmack_framework.database import (
+    add_session,
+    add_topic as db_add_topic,
+    list_topics,
+    topic_sessions,
+)
+
+from richmack_framework.tracker import (
+    topic_summary,
+)
+
+
 from richmack_framework import (
     adjusted_wpm,
     approach_score,
@@ -332,13 +344,13 @@ def cmd_learning(
     )
 
     print(
-        f"H + W + K score:        {components:.2f}"
+        f"Component score:        {components:.2f}"
     )
     print(
-        f"Strict Learning Unit:   {strict}"
+        f"Strict LU earned:       {strict}"
     )
     print(
-        f"LU supplied:            {args.learning_units:.2f}"
+        f"Manual LU supplied:     {args.learning_units:.2f}"
     )
     print(
         f"Refresh Units:          {refresh:.2f}"
@@ -502,6 +514,208 @@ def cmd_focus(
     print()
 
 
+
+def cmd_topic_add(
+    args,
+):
+    topic_id = db_add_topic(
+        args.name,
+        description=args.description,
+    )
+
+    heading(
+        "Topic Created",
+        args.name,
+    )
+
+    print(
+        f"Topic ID:               {topic_id}"
+    )
+    print(
+        f"Description:            {args.description}"
+    )
+    print()
+
+
+def cmd_topic_list(
+    args,
+):
+    heading(
+        "Tracked Topics"
+    )
+
+    rows = list_topics()
+
+    if not rows:
+        print(
+            "No tracked topics."
+        )
+        print()
+        return
+
+    for row in rows:
+        print(
+            f"{row['name']:<30} "
+            f"sessions={row['session_count']}"
+        )
+
+    print()
+
+
+def cmd_log(
+    args,
+):
+    if args.stable_reps is None:
+        stable = (
+            args.raw_reps
+            * args.retention
+        )
+
+    else:
+        stable = args.stable_reps
+
+    if args.refresh_units is None:
+        refresh = (
+            args.learning_units
+            / 3
+        )
+
+    else:
+        refresh = args.refresh_units
+
+    session_id = add_session(
+        args.topic_name,
+        raw_reps=args.raw_reps,
+        stable_reps=stable,
+        learning_units=args.learning_units,
+        refresh_units=refresh,
+        connections=args.connections,
+        anti_mass=args.anti_mass,
+        capability=args.capability,
+        assisted_capability=args.assisted,
+        solo_capability=args.solo,
+        notes=args.notes,
+    )
+
+    heading(
+        "Learning Session Logged",
+        args.topic_name,
+    )
+
+    print(
+        f"Session ID:             {session_id}"
+    )
+    print(
+        f"Raw repetitions:        {args.raw_reps:.2f}"
+    )
+    print(
+        f"Stable repetitions:     {stable:.2f}"
+    )
+    print(
+        f"Learning Units:         {args.learning_units:.2f}"
+    )
+    print(
+        f"Refresh Units:          {refresh:.2f}"
+    )
+    print(
+        f"Connections:            {args.connections:.2f}"
+    )
+    print()
+
+
+def cmd_status(
+    args,
+):
+    result = topic_summary(
+        args.topic_name
+    )
+
+    heading(
+        "Topic Status",
+        result["topic"],
+    )
+
+    print(
+        f"Sessions:               {result['sessions']}"
+    )
+    print(
+        f"Raw repetitions:        {result['raw_reps']:.2f}"
+    )
+    print(
+        f"Stable repetitions:     {result['stable_reps']:.2f}"
+    )
+    print(
+        f"Retention:              {result['retention'] * 100:.2f}%"
+    )
+    print(
+        f"Leakage:                {result['leakage']:.2f}"
+    )
+    print(
+        f"Learning Units:         {result['learning_units']:.2f}"
+    )
+    print(
+        f"Refresh Units:          {result['refresh_units']:.2f}"
+    )
+    print(
+        f"Connections:            {result['connections']:.2f}"
+    )
+    print(
+        f"Growth multiplier:      {result['growth_multiplier']:.4f}x"
+    )
+    print(
+        f"Net information mass:   {result['net_mass']:.4f}"
+    )
+    print(
+        f"Information density:    {result['density']:.4f}"
+    )
+
+    if result["latest_capability"] is not None:
+        print(
+            f"Latest capability:      "
+            f"{result['latest_capability']:.4f}"
+        )
+
+    print()
+
+
+def cmd_history(
+    args,
+):
+    rows = topic_sessions(
+        args.topic_name
+    )
+
+    heading(
+        "Topic History",
+        args.topic_name,
+    )
+
+    if not rows:
+        print(
+            "No sessions recorded."
+        )
+        print()
+        return
+
+    for row in rows:
+        print(
+            f"[{row['id']}] "
+            f"{row['created_at']} "
+            f"raw={row['raw_reps']:.2f} "
+            f"stable={row['stable_reps']:.2f} "
+            f"LU={row['learning_units']:.2f} "
+            f"RU={row['refresh_units']:.2f} "
+            f"connections={row['connections']:.2f}"
+        )
+
+        if row["notes"]:
+            print(
+                f"    {row['notes']}"
+            )
+
+    print()
+
+
 def add_topic(
     parser,
 ):
@@ -525,6 +739,147 @@ def build_parser():
 
     sub = parser.add_subparsers(
         dest="command",
+    )
+
+    topic = sub.add_parser(
+        "topic",
+        help="Create and list tracked learning topics.",
+    )
+
+    topic_sub = topic.add_subparsers(
+        dest="topic_command",
+        required=True,
+    )
+
+    topic_add = topic_sub.add_parser(
+        "add",
+        help="Create a tracked topic.",
+    )
+
+    topic_add.add_argument(
+        "name",
+    )
+
+    topic_add.add_argument(
+        "--description",
+        default="",
+    )
+
+    topic_add.set_defaults(
+        func=cmd_topic_add
+    )
+
+    topic_list = topic_sub.add_parser(
+        "list",
+        help="List tracked topics.",
+    )
+
+    topic_list.set_defaults(
+        func=cmd_topic_list
+    )
+
+    log = sub.add_parser(
+        "log",
+        help="Record a learning/practice session.",
+    )
+
+    log.add_argument(
+        "topic_name",
+    )
+
+    log.add_argument(
+        "--raw-reps",
+        type=float,
+        default=0,
+    )
+
+    log.add_argument(
+        "--stable-reps",
+        type=float,
+        default=None,
+    )
+
+    log.add_argument(
+        "--retention",
+        type=float,
+        default=1.0,
+    )
+
+    log.add_argument(
+        "--learning-units",
+        type=float,
+        default=0,
+    )
+
+    log.add_argument(
+        "--refresh-units",
+        type=float,
+        default=None,
+    )
+
+    log.add_argument(
+        "--connections",
+        type=float,
+        default=0,
+    )
+
+    log.add_argument(
+        "--anti-mass",
+        type=float,
+        default=0,
+    )
+
+    log.add_argument(
+        "--capability",
+        type=float,
+        default=None,
+    )
+
+    log.add_argument(
+        "--assisted",
+        type=float,
+        default=None,
+    )
+
+    log.add_argument(
+        "--solo",
+        type=float,
+        default=None,
+    )
+
+    log.add_argument(
+        "--notes",
+        default="",
+    )
+
+    log.set_defaults(
+        func=cmd_log
+    )
+
+    status = sub.add_parser(
+        "status",
+        help="Show accumulated topic metrics.",
+    )
+
+    status.add_argument(
+        "topic_name",
+    )
+
+    status.set_defaults(
+        func=cmd_status
+    )
+
+    history = sub.add_parser(
+        "history",
+        help="Show recorded sessions for a topic.",
+    )
+
+    history.add_argument(
+        "topic_name",
+    )
+
+    history.set_defaults(
+        func=cmd_history
     )
 
     reference = sub.add_parser(
