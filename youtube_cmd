@@ -1,39 +1,477 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CHANNELS="$HOME/.richmackos/youtube-channels.json"
+BASE="$HOME/.richmackos"
+CHANNELS="$BASE/youtube-channels.json"
+
+
+show_help() {
+cat <<'HELP'
+RichmackOS YouTube Knowledge Engine
+
+Usage:
+
+  richmack youtube COMMAND [OPTIONS]
+
+
+CHANNEL MANAGEMENT
+
+  channels
+      List configured YouTube channels.
+
+  add-channel KEY "NAME" URL
+      Add a YouTube channel.
+
+  remove-channel KEY
+      Remove a configured channel.
+
+
+INGESTION
+
+  sync --limit N
+      Sync the newest N videos from every configured channel.
+
+  sync --channel KEY --limit N
+      Sync only one channel.
+
+  status
+      Show YouTube transcript ingestion status.
+
+
+KNOWLEDGE ENGINE
+
+  knowledge build CHANNEL
+      Build structured knowledge for one channel.
+
+  knowledge build CHANNEL --limit N
+      Build the newest N indexed videos.
+
+  knowledge build --all
+      Build every configured channel.
+
+  knowledge build CHANNEL --force --no-summary
+      Rebuild deterministic data without rerunning Gemma summaries.
+
+  knowledge status
+      Show structured knowledge status.
+
+  knowledge videos CHANNEL
+      List indexed videos.
+
+  knowledge topics CHANNEL
+      Show extracted concepts and topics.
+
+
+SEARCH / RAG
+
+  search QUERY
+      Search downloaded transcript text.
+
+  ask CHANNEL "QUESTION"
+      Ask a scoped RAG question.
+
+  ask CHANNEL --latest "QUESTION"
+      Restrict the question to the latest transcript.
+
+
+SUMMARIES
+
+  summarize CHANNEL --limit N
+      Summarize recent videos from one channel.
+
+  summarize --all --limit N
+      Summarize every configured channel.
+
+  summarize --all --limit N --combined
+      Generate channel summaries plus one combined briefing.
+
+
+EVIDENCE CHAT
+
+  chat CHANNEL
+      Open transcript-first interactive evidence chat.
+
+
+DISCOVERY
+
+  workflow
+      Show the recommended RichmackOS YouTube workflow.
+
+  examples
+      Show example commands and example chat questions.
+
+
+CHAT FEATURES
+
+  Channel isolation
+  Video routing
+  Transcript-first retrieval
+  Evidence citations
+  Follow-up video memory
+  Per-video channel analysis
+  Cross-video synthesis
+  Claim attribution
+
+
+INSIDE YOUTUBE CHAT
+
+  /help
+      Show interactive help.
+
+  /video
+      Show the current selected video.
+
+  /sources
+      Show evidence used for the previous answer.
+
+  /clear
+      Clear video/follow-up context.
+
+  /quit
+      Exit chat.
+
+
+QUICK START
+
+  richmack youtube sync --limit 3
+
+  richmack youtube knowledge build tim-ferriss --limit 5
+
+  richmack youtube knowledge videos tim-ferriss
+
+  richmack youtube knowledge topics tim-ferriss
+
+  richmack youtube chat tim-ferriss
+
+
+COMMON CHAT QUESTIONS
+
+  what is the 4x4 protocol?
+
+  what else is mentioned?
+
+  what are the main topics across the latest videos?
+
+  what is the most unusual claim discussed?
+
+  what else did they say about it?
+
+  tell me what they said about knights templar
+
+
+MORE HELP
+
+  richmack youtube workflow
+
+  richmack youtube examples
+
+  man richmack
+HELP
+}
+
+
+show_workflow() {
+cat <<'WORKFLOW'
+RichmackOS YouTube Knowledge Workflow
+
+1. ADD CHANNELS
+
+   richmack youtube add-channel \
+     CHANNEL_KEY \
+     "Channel Name" \
+     "https://www.youtube.com/@Channel/videos"
+
+
+2. VERIFY CHANNELS
+
+   richmack youtube channels
+
+
+3. SYNC RECENT VIDEOS
+
+   richmack youtube sync --limit 3
+
+   Or one channel:
+
+   richmack youtube sync \
+     --channel tim-ferriss \
+     --limit 3
+
+
+4. BUILD / VERIFY STRUCTURED KNOWLEDGE
+
+   richmack youtube knowledge build \
+     tim-ferriss \
+     --limit 5
+
+   richmack youtube knowledge status
+
+
+5. INSPECT VIDEOS
+
+   richmack youtube knowledge videos tim-ferriss
+
+
+6. INSPECT TOPICS
+
+   richmack youtube knowledge topics tim-ferriss
+
+
+7. OPEN TRANSCRIPT-FIRST CHAT
+
+   richmack youtube chat tim-ferriss
+
+
+8. ASK A SPECIFIC VIDEO QUESTION
+
+   youtube> what is the 4x4 protocol?
+
+
+9. ASK A FOLLOW-UP
+
+   youtube> what else is mentioned?
+
+
+10. INSPECT SOURCES
+
+   youtube> /sources
+
+
+11. ASK A CHANNEL-WIDE QUESTION
+
+   richmack youtube chat danny-jones
+
+   youtube> what are the main topics across the latest videos?
+
+
+12. COMPARE CLAIMS
+
+   youtube> what is the most unusual claim discussed?
+
+   youtube> what else did they say about it?
+
+
+13. CREATE CHANNEL SUMMARIES
+
+   richmack youtube summarize \
+     --all \
+     --limit 3
+
+
+14. CREATE A COMBINED BRIEFING
+
+   richmack youtube summarize \
+     --all \
+     --limit 3 \
+     --combined
+
+
+DATA FLOW
+
+YouTube
+   ↓
+yt-dlp
+   ↓
+clean transcript
+   ↓
+Knowledge-Inbox
+   ↓
+RichmackRAG
+   ↓
+YouTube Knowledge Engine
+   ↓
+channel / video / chunk retrieval
+   ↓
+Gemma 3 4B
+   ↓
+evidence-grounded answer
+WORKFLOW
+}
+
+
+show_examples() {
+cat <<'EXAMPLES'
+RichmackOS YouTube Examples
+
+
+CHANNEL MANAGEMENT
+
+richmack youtube channels
+
+richmack youtube add-channel \
+  1090-jake \
+  "1090 Jake" \
+  "https://www.youtube.com/@EndOfSentence/videos"
+
+richmack youtube add-channel \
+  renaissance-periodization \
+  "Renaissance Periodization" \
+  "https://www.youtube.com/@RenaissancePeriodization/videos"
+
+
+SYNC
+
+richmack youtube sync --limit 3
+
+richmack youtube sync \
+  --channel fireship \
+  --limit 2
+
+
+KNOWLEDGE
+
+richmack youtube knowledge build tim-ferriss --limit 5
+
+richmack youtube knowledge build danny-jones --limit 5
+
+richmack youtube knowledge build --all
+
+richmack youtube knowledge status
+
+richmack youtube knowledge videos tim-ferriss
+
+richmack youtube knowledge topics danny-jones
+
+
+SCOPED RAG
+
+richmack youtube ask \
+  fireship \
+  "What programming topics were discussed?"
+
+richmack youtube ask \
+  tim-ferriss \
+  --latest \
+  "What did the latest video discuss?"
+
+
+SUMMARIES
+
+richmack youtube summarize \
+  chill-dude-explains \
+  --limit 3
+
+richmack youtube summarize \
+  --all \
+  --limit 3
+
+richmack youtube summarize \
+  --all \
+  --limit 3 \
+  --combined
+
+
+TIM FERRISS CHAT
+
+richmack youtube chat tim-ferriss
+
+youtube> what is the 4x4 protocol?
+
+youtube> what else is mentioned?
+
+youtube> tell me more about AI predictions
+
+youtube> give me details about Guy Oseary
+
+youtube> what did Madonna say about AI?
+
+youtube> /sources
+
+
+DANNY JONES CHAT
+
+richmack youtube chat danny-jones
+
+youtube> what are the main topics across the latest videos?
+
+youtube> what is the most unusual claim discussed?
+
+youtube> what else did they say about it?
+
+youtube> tell me what they said about knights templar
+
+youtube> what did the Area 51 guest claim?
+
+youtube> what did Carl Hayden Smith say about DMT?
+
+youtube> /sources
+
+
+CHAT COMMANDS
+
+/help
+/video
+/sources
+/clear
+/quit
+EXAMPLES
+}
+
 
 case "${1:-}" in
 
-    ask)
-        shift
+    ""|-h|--help|help)
+        show_help
+        ;;
 
-        exec /usr/bin/python3 \
-          "$HOME/.richmackos/youtube_ask.py" \
-          "$@"
+    workflow)
+        show_workflow
+        ;;
+
+    examples)
+        show_examples
         ;;
 
     chat)
         shift
-
         exec /usr/bin/python3 \
-          "$HOME/.richmackos/youtube_chat.py" \
+          "$BASE/youtube_chat_v2.py" \
+          "$@"
+        ;;
+
+    knowledge)
+        shift
+        exec /usr/bin/python3 \
+          "$BASE/youtube_knowledge.py" \
+          "$@"
+        ;;
+
+    ask)
+        shift
+        exec /usr/bin/python3 \
+          "$BASE/youtube_ask.py" \
           "$@"
         ;;
 
     summarize)
         shift
-
         exec /usr/bin/python3 \
-          "$HOME/.richmackos/youtube_summarize.py" \
+          "$BASE/youtube_summarize.py" \
           "$@"
+        ;;
+
+    sync)
+        shift
+
+        /usr/bin/python3 \
+          "$BASE/youtube.py" \
+          sync \
+          "$@"
+
+        echo
+        echo "Updating YouTube Knowledge Engine..."
+
+        /usr/bin/python3 \
+          "$BASE/youtube_knowledge.py" \
+          build \
+          --all
         ;;
 
     add-channel)
         shift
 
         if [ "$#" -ne 3 ]; then
-            echo 'Usage: richmack youtube add-channel KEY "Display Name" URL'
+            echo 'Usage: richmack youtube add-channel KEY "NAME" URL'
             exit 1
         fi
 
@@ -58,7 +496,7 @@ else:
 
 data[key] = {
     "name": name,
-    "url": url
+    "url": url,
 }
 
 path.write_text(
@@ -70,7 +508,9 @@ path.write_text(
     encoding="utf-8"
 )
 
-print(f"Added channel: {key} -> {name}")
+print(
+    f"Added channel: {key} -> {name}"
+)
 PY
         ;;
 
@@ -90,11 +530,6 @@ from pathlib import Path
 path = Path(sys.argv[1])
 key = sys.argv[2]
 
-if not path.exists():
-    raise SystemExit(
-        "Channel configuration does not exist."
-    )
-
 data = json.loads(
     path.read_text(
         encoding="utf-8"
@@ -103,7 +538,7 @@ data = json.loads(
 
 if key not in data:
     raise SystemExit(
-        f"Channel not found: {key}"
+        f"Unknown channel: {key}"
     )
 
 name = data[key].get(
@@ -130,7 +565,7 @@ PY
 
     *)
         exec /usr/bin/python3 \
-          "$HOME/.richmackos/youtube.py" \
+          "$BASE/youtube.py" \
           "$@"
         ;;
 esac
