@@ -160,6 +160,17 @@ def read_metadata(path):
     return meta
 
 
+def transcript_upload_sort_key(path):
+    meta = read_metadata(path)
+    value = str(meta.get("upload_date", "")).strip()
+    if len(value) == 8 and value.isdigit():
+        return (1, value, path.name)
+    try:
+        return (0, f"{path.stat().st_mtime:020.6f}", path.name)
+    except Exception:
+        return (0, "", path.name)
+
+
 ###############################################################################
 # CHUNKING
 ###############################################################################
@@ -220,7 +231,7 @@ def load_channel_chunks(
         directory.glob(
             "*.txt"
         ),
-        key=lambda p: p.stat().st_mtime,
+        key=transcript_upload_sort_key,
         reverse=True
     )
 

@@ -3,20 +3,13 @@
 import argparse
 import datetime
 import json
-import io
-import os
-import shutil
-import subprocess
-import sys
 import urllib.request
-from contextlib import redirect_stdout
 from pathlib import Path
 
 HOME = Path.home()
 BASE = HOME / ".richmackos"
 CHANNELS_FILE = BASE / "youtube-channels.json"
 YT_ROOT = HOME / "Knowledge-Inbox" / "YouTube"
-KNOWLEDGE_ROOT = HOME / "Knowledge" / "YouTube"
 
 OLLAMA = "http://richmack.local:11434"
 MODEL = "gemma3:4b"
@@ -35,12 +28,11 @@ def progress(label, percent, width=30):
     print(
         f"\r{label:<22} {bar} {percent:3d}%",
         end="",
-        flush=True,
-        file=sys.stderr
+        flush=True
     )
 
     if percent >= 100:
-        print(file=sys.stderr)
+        print()
 
 
 BOLD    = "\033[1m"
@@ -112,30 +104,15 @@ def parse_date(path):
     ).date()
 
 
-def select_files(channel_dir, channel_key=None, days=None, limit=None):
-    # Prefer the knowledge index so summarize uses the same canonical video
-    # set/order as `youtube knowledge build`. Fall back to transcript
-    # UPLOAD_DATE ordering for channels not built yet.
-    files = []
+def select_files(channel_dir, days=None, limit=None):
+    files = list(
+        channel_dir.glob("*.txt")
+    )
 
-    if channel_key:
-        index_path = KNOWLEDGE_ROOT / channel_key / "index.json"
-        if index_path.exists():
-            try:
-                data = json.loads(index_path.read_text(encoding="utf-8"))
-                for item in data.get("videos", []):
-                    video_id = str(item.get("video_id", "")).strip()
-                    if not video_id:
-                        continue
-                    transcript = channel_dir / f"{video_id}.txt"
-                    if transcript.exists():
-                        files.append(transcript)
-            except Exception as exc:
-                print(f"{YELLOW}Warning: could not read knowledge index: {exc}{RESET}")
-
-    if not files:
-        files = list(channel_dir.glob("*.txt"))
-        files.sort(key=parse_date, reverse=True)
+    files.sort(
+        key=parse_date,
+        reverse=True
+    )
 
     if days is not None:
         cutoff = (
@@ -198,7 +175,6 @@ def summarize_channel(key, config, days=None, limit=None):
 
     files = select_files(
         channel_dir,
-        channel_key=key,
         days=days,
         limit=limit
     )
@@ -417,62 +393,6 @@ CHANNEL SUMMARIES:
 
 
 
-
-
-def page_text(text, pager="auto"):
-    """Page completed summary output, preferring bat and falling back to less -R."""
-    if not text:
-        return
-
-    if not sys.stdout.isatty():
-        # Preserve normal pipe/redirect semantics.
-        print(text, end="")
-        return
-
-    candidates = []
-    if pager == "bat":
-        candidates = ["bat"]
-    elif pager == "less":
-        candidates = ["less"]
-    else:
-        candidates = ["bat", "less"]
-
-    for candidate in candidates:
-        executable = shutil.which(candidate)
-        if not executable:
-            continue
-
-        if candidate == "bat":
-            cmd = [
-                executable,
-                "--paging=always",
-                "--language=txt",
-                "--style=plain",
-            ]
-        else:
-            cmd = [executable, "-R"]
-
-        try:
-            subprocess.run(cmd, input=text, text=True, check=False)
-            return
-        except OSError:
-            continue
-
-    print(text, end="")
-
-
-def run_with_optional_pager(func, pager=None):
-    if not pager:
-        return func()
-
-    buffer = io.StringIO()
-    with redirect_stdout(buffer):
-        result = func()
-
-    page_text(buffer.getvalue(), pager=pager)
-    return result
-
-
 def main():
     parser = argparse.ArgumentParser(
         prog="richmack youtube summarize",
@@ -509,64 +429,50 @@ def main():
         help="Maximum transcripts per channel"
     )
 
-    parser.add_argument(
-        "--pager",
-        nargs="?",
-        const="auto",
-        choices=("auto", "bat", "less"),
-        help=(
-            "Open completed output in a pager. "
-            "Auto prefers bat and falls back to less -R."
-        )
-    )
-
     args = parser.parse_args()
 
     channels = load_channels()
 
-    def execute():
-        if args.all:
-            channel_results = []
+    if args.all:
+        channel_results = []
 
-            for key, config in channels.items():
-                result = summarize_channel(
-                    key,
-                    config,
-                    days=args.days,
-                    limit=args.limit
-                )
-
-                if isinstance(result, str) and result.strip():
-                    channel_results.append(
-                        (config["name"], result)
-                    )
-
-            if args.combined:
-                combined_summary(
-                    channel_results,
-                    MODEL
-                )
-
-            return
-
-        if not args.channel:
-            raise SystemExit(
-                "Provide a channel key or use --all"
+        for key, config in channels.items():
+            result = summarize_channel(
+                key,
+                config,
+                days=args.days,
+                limit=args.limit
             )
 
-        if args.channel not in channels:
-            raise SystemExit(
-                "Unknown channel. Use: richmack youtube channels"
+            if isinstance(result, str) and result.strip():
+                channel_results.append(
+                    (config["name"], result)
+                )
+
+        if args.combined:
+            combined_summary(
+                channel_results,
+                MODEL
             )
 
-        summarize_channel(
-            args.channel,
-            channels[args.channel],
-            days=args.days,
-            limit=args.limit
+        return
+
+    if not args.channel:
+        raise SystemExit(
+            "Provide a channel key or use --all"
         )
 
-    run_with_optional_pager(execute, pager=args.pager)
+    if args.channel not in channels:
+        raise SystemExit(
+            "Unknown channel. Use: richmack youtube channels"
+        )
+
+    summarize_channel(
+        args.channel,
+        channels[args.channel],
+        days=args.days,
+        limit=args.limit
+    )
 
 
 if __name__ == "__main__":

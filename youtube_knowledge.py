@@ -1358,6 +1358,27 @@ def build_channel_index(
 # BUILD
 ###############################################################################
 
+def source_upload_sort_key(path):
+    """Return a stable newest-first key based on transcript UPLOAD_DATE.
+
+    YouTube video chronology must not depend on filesystem modification time.
+    mtime is used only as a fallback when transcript metadata has no valid
+    YYYYMMDD upload date.
+    """
+    try:
+        metadata, _description, _transcript = parse_source_file(path)
+        value = str(metadata.get("upload_date", "")).strip()
+        if len(value) == 8 and value.isdigit():
+            return (1, value, path.name)
+    except Exception:
+        pass
+
+    try:
+        return (0, f"{path.stat().st_mtime:020.6f}", path.name)
+    except Exception:
+        return (0, "", path.name)
+
+
 def build_channel(
     key,
     config,
@@ -1384,8 +1405,7 @@ def build_channel(
         directory.glob(
             "*.txt"
         ),
-        key=lambda p:
-            p.stat().st_mtime,
+        key=source_upload_sort_key,
         reverse=True
     )
 

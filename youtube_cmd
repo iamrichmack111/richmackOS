@@ -145,6 +145,15 @@ SEARCH / RAG
       Restrict the question to the newest transcript.
 
 
+RESEARCH / RESOURCES
+
+  research [OPTIONS]
+      Run the YouTube research pipeline.
+
+  resources [OPTIONS]
+      Alias for research/resource extraction.
+
+
 SUMMARIES
 
   summarize CHANNEL --limit N
@@ -155,6 +164,13 @@ SUMMARIES
 
   summarize --all --limit N --combined
       Generate channel summaries plus one combined briefing.
+
+  summarize --all --limit N --pager
+      Open the completed output in a pager. Auto prefers bat,
+      then falls back to less -R. You can also use:
+
+          --pager=bat
+          --pager=less
 
 
 EVIDENCE CHAT
@@ -469,6 +485,15 @@ richmack youtube ask \
   "What did the latest video discuss?"
 
 
+RESEARCH / RESOURCES
+
+  research [OPTIONS]
+      Run the YouTube research pipeline.
+
+  resources [OPTIONS]
+      Alias for research/resource extraction.
+
+
 SUMMARIES
 
 richmack youtube summarize \
@@ -564,6 +589,13 @@ case "${1:-}" in
         shift
         exec /usr/bin/python3 \
           "$BASE/youtube_ask.py" \
+          "$@"
+        ;;
+
+    research|resources)
+        shift
+        exec /usr/bin/python3 \
+          "$BASE/youtube_research.py" \
           "$@"
         ;;
 

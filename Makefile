@@ -1,7 +1,9 @@
-.PHONY: test install
+.PHONY: test smoke unit
 
-test:
+test: smoke unit
+
+smoke:
 	./tests/smoke.sh
 
-install:
-	./install.sh
+unit:
+	python3 -m unittest discover -s tests -p 'test_*.py' -v

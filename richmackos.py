@@ -928,6 +928,14 @@ def main():
     elif cmd == "ai": subprocess.run(["richmackai"] + args, check=False)
     elif cmd == "chat": subprocess.run(["richmackai", "--chat"], check=False)
     elif cmd == "rag": subprocess.run(["richmackrag", "ask"] + args, check=False)
+    elif cmd == "youtube":
+        youtube_cmd = Path(__file__).resolve().parent / "youtube_cmd"
+
+        if not youtube_cmd.exists():
+            print(color("YouTube subsystem not found: youtube_cmd", RED))
+        else:
+            subprocess.run([str(youtube_cmd)] + args, check=False)
+
     elif cmd in {"help", "-h", "--help"}: help_screen()
     else:
         print(color(f"Unknown command: {cmd}", RED))
