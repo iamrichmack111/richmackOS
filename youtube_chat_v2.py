@@ -1818,6 +1818,141 @@ def print_channel_evidence(
     print()
 
 
+
+def run_channel_question(
+    *,
+    model,
+    question,
+    videos
+):
+    progress(
+        "Routing",
+        100
+    )
+
+    (
+        answer,
+        evidence_display,
+        selected_video_id
+    ) = generate_channel_answer(
+        model,
+        question,
+        videos
+    )
+
+    current_video = None
+
+    if selected_video_id:
+        current_video = find_video_by_id(
+            videos,
+            selected_video_id
+        )
+
+        if current_video:
+            print(
+                f"{GRAY}"
+                f"Follow-up video lock: "
+                f"{current_video['metadata'].get('title', '')}"
+                f"{RESET}"
+            )
+
+    print_answer_panel(
+        answer
+    )
+
+    print_channel_evidence(
+        evidence_display
+    )
+
+    return {
+        "answer": answer,
+        "evidence": evidence_display,
+        "current_video": current_video,
+    }
+
+
+def run_video_question(
+    *,
+    route,
+    model,
+    question,
+    last_question,
+    current_video,
+    videos,
+    top_k
+):
+    video, evidence = select_chat_evidence(
+        route=route,
+        question=question,
+        last_question=last_question,
+        current_video=current_video,
+        videos=videos,
+        top_k=top_k
+    )
+
+    if route == "video":
+        current_video = video
+
+    progress(
+        "Routing",
+        100
+    )
+
+    title = (
+        video[
+            "metadata"
+        ].get(
+            "title",
+            ""
+        )
+    )
+
+    print(
+        f"{GRAY}"
+        f"Video scope: "
+        f"{title}"
+        f"{RESET}"
+    )
+
+    if not evidence:
+        evidence = whole_video_sample(
+            video,
+            top_k=top_k
+        )
+
+    description_fallback = (
+        not evidence
+    )
+
+    (
+        answer,
+        evidence_display
+    ) = generate(
+        model,
+        question,
+        video,
+        evidence,
+        description_fallback=(
+            description_fallback
+        )
+    )
+
+    print_answer_panel(
+        answer
+    )
+
+    print_single_video_evidence(
+        evidence_display,
+        title
+    )
+
+    return {
+        "answer": answer,
+        "evidence": evidence_display,
+        "current_video": current_video,
+    }
+
+
 def chat(
     channel_key,
     model,
@@ -1946,22 +2081,12 @@ def chat(
         # ---------------------------------------------------------------
 
         if route == "channel":
-            progress(
-                "Routing",
-                100
-            )
-
             try:
-                (
-                    answer,
-                    evidence_display,
-                    selected_video_id
-                ) = generate_channel_answer(
-                    model,
-                    question,
-                    videos
+                result = run_channel_question(
+                    model=model,
+                    question=question,
+                    videos=videos
                 )
-
             except Exception as exc:
                 print(
                     f"{RED}"
@@ -1971,40 +2096,14 @@ def chat(
                 continue
 
             last_evidence = (
-                evidence_display
+                result["evidence"]
             )
 
-            # If a channel-wide comparison selected a specific winning
-            # video (for example "most unusual claim"), lock subsequent
-            # pronoun-based follow-ups to that exact source video.
-            if selected_video_id:
-                current_video = find_video_by_id(
-                    videos,
-                    selected_video_id
-                )
-
-                if current_video:
-                    print(
-                        f"{GRAY}"
-                        f"Follow-up video lock: "
-                        f"{current_video['metadata'].get('title', '')}"
-                        f"{RESET}"
-                    )
-            else:
-                current_video = None
-
-            last_question = (
-                question
+            current_video = (
+                result["current_video"]
             )
 
-            print_answer_panel(
-                answer
-            )
-
-            print_channel_evidence(
-                evidence_display
-            )
-
+            last_question = question
             continue
 
         # ---------------------------------------------------------------

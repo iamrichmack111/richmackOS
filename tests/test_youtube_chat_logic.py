@@ -400,3 +400,300 @@ class ChatRenderingTests(unittest.TestCase):
             ),
             "  [2] Example — DESCRIPTION",
         )
+
+
+class ChannelQuestionExecutionTests(unittest.TestCase):
+
+    def test_channel_question_returns_lock_and_evidence(self):
+        videos = [
+            make_video(
+                video_id="winner",
+                title="Winner Video",
+            )
+        ]
+
+        evidence = [
+            {
+                "number": 1,
+                "title": "Winner Video",
+                "video_id": "winner",
+            }
+        ]
+
+        with (
+            patch.object(
+                yc,
+                "generate_channel_answer",
+                return_value=(
+                    "answer",
+                    evidence,
+                    "winner",
+                ),
+            ),
+            patch.object(
+                yc,
+                "find_video_by_id",
+                return_value=videos[0],
+            ),
+            patch.object(
+                yc,
+                "print_answer_panel",
+            ),
+            patch.object(
+                yc,
+                "print_channel_evidence",
+            ),
+            patch.object(
+                yc,
+                "progress",
+            ),
+        ):
+            result = yc.run_channel_question(
+                model="model",
+                question="most unusual claim",
+                videos=videos,
+            )
+
+        self.assertEqual(
+            result["answer"],
+            "answer",
+        )
+
+        self.assertEqual(
+            result["evidence"],
+            evidence,
+        )
+
+        self.assertIs(
+            result["current_video"],
+            videos[0],
+        )
+
+    def test_channel_question_without_selected_video_clears_lock(self):
+        with (
+            patch.object(
+                yc,
+                "generate_channel_answer",
+                return_value=(
+                    "answer",
+                    [],
+                    None,
+                ),
+            ),
+            patch.object(
+                yc,
+                "print_answer_panel",
+            ),
+            patch.object(
+                yc,
+                "print_channel_evidence",
+            ),
+            patch.object(
+                yc,
+                "progress",
+            ),
+        ):
+            result = yc.run_channel_question(
+                model="model",
+                question="main topics",
+                videos=[],
+            )
+
+        self.assertIsNone(
+            result["current_video"]
+        )
+
+        self.assertEqual(
+            result["evidence"],
+            [],
+        )
+
+
+class VideoQuestionExecutionTests(unittest.TestCase):
+
+    def test_video_question_uses_transcript_evidence(self):
+        video = make_video(
+            title="Test Video"
+        )
+
+        raw_evidence = [
+            (
+                1.0,
+                {
+                    "chunk_no": 1,
+                    "text": "AI evidence",
+                },
+            )
+        ]
+
+        display = [
+            {
+                "number": 1,
+                "type": "TRANSCRIPT",
+                "chunk": 1,
+            }
+        ]
+
+        with (
+            patch.object(
+                yc,
+                "select_chat_evidence",
+                return_value=(
+                    video,
+                    raw_evidence,
+                ),
+            ),
+            patch.object(
+                yc,
+                "generate",
+                return_value=(
+                    "answer",
+                    display,
+                ),
+            ) as generate,
+            patch.object(
+                yc,
+                "print_answer_panel",
+            ),
+            patch.object(
+                yc,
+                "print_single_video_evidence",
+            ),
+            patch.object(
+                yc,
+                "progress",
+            ),
+        ):
+            result = yc.run_video_question(
+                route="video",
+                model="model",
+                question="AI",
+                last_question=None,
+                current_video=None,
+                videos=[video],
+                top_k=6,
+            )
+
+        self.assertIs(
+            result["current_video"],
+            video,
+        )
+
+        self.assertEqual(
+            result["evidence"],
+            display,
+        )
+
+        generate.assert_called_once_with(
+            "model",
+            "AI",
+            video,
+            raw_evidence,
+            description_fallback=False,
+        )
+
+    def test_video_question_uses_description_only_after_no_transcript(self):
+        video = make_video()
+
+        with (
+            patch.object(
+                yc,
+                "select_chat_evidence",
+                return_value=(
+                    video,
+                    [],
+                ),
+            ),
+            patch.object(
+                yc,
+                "whole_video_sample",
+                return_value=[],
+            ),
+            patch.object(
+                yc,
+                "generate",
+                return_value=(
+                    "answer",
+                    [],
+                ),
+            ) as generate,
+            patch.object(
+                yc,
+                "print_answer_panel",
+            ),
+            patch.object(
+                yc,
+                "print_single_video_evidence",
+            ),
+            patch.object(
+                yc,
+                "progress",
+            ),
+        ):
+            yc.run_video_question(
+                route="video",
+                model="model",
+                question="question",
+                last_question=None,
+                current_video=None,
+                videos=[video],
+                top_k=6,
+            )
+
+        generate.assert_called_once_with(
+            "model",
+            "question",
+            video,
+            [],
+            description_fallback=True,
+        )
+
+    def test_context_route_preserves_current_video(self):
+        current = make_video(
+            video_id="locked"
+        )
+
+        with (
+            patch.object(
+                yc,
+                "select_chat_evidence",
+                return_value=(
+                    current,
+                    [("score", "chunk")],
+                ),
+            ),
+            patch.object(
+                yc,
+                "generate",
+                return_value=(
+                    "answer",
+                    [],
+                ),
+            ),
+            patch.object(
+                yc,
+                "print_answer_panel",
+            ),
+            patch.object(
+                yc,
+                "print_single_video_evidence",
+            ),
+            patch.object(
+                yc,
+                "progress",
+            ),
+        ):
+            result = yc.run_video_question(
+                route="context",
+                model="model",
+                question="what else?",
+                last_question="AI",
+                current_video=current,
+                videos=[current],
+                top_k=6,
+            )
+
+        self.assertIs(
+            result["current_video"],
+            current,
+        )
