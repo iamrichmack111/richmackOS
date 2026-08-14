@@ -2016,22 +2016,78 @@ def chat(
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="richmack youtube chat"
+        prog="richmack youtube chat",
+        description=(
+            "Transcript-first YouTube evidence chat with "
+            "video routing, citations, follow-up memory, "
+            "and channel-wide analysis."
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog="""
+Examples:
+
+  richmack youtube chat tim-ferriss
+
+  richmack youtube chat danny-jones
+
+Inside chat:
+
+  what is the 4x4 protocol?
+  what else is mentioned?
+  what are the main topics across the latest videos?
+  what is the most unusual claim discussed?
+  what else did they say about it?
+  tell me what they said about knights templar
+
+Chat commands:
+
+  /help
+      Show interactive help
+
+  /video
+      Show the currently selected video
+
+  /sources
+      Show evidence used for the previous answer
+
+  /clear
+      Clear video/follow-up context
+
+  /quit
+      Exit chat
+
+Retrieval flow:
+
+  question
+      ↓
+  channel isolation
+      ↓
+  video routing
+      ↓
+  transcript evidence
+      ↓
+  Gemma
+      ↓
+  cited answer
+"""
     )
 
     parser.add_argument(
-        "channel"
+        "channel",
+        help="Configured YouTube channel key, e.g. tim-ferriss"
     )
 
     parser.add_argument(
         "--top-k",
         type=int,
-        default=7
+        default=7,
+        help="Number of transcript evidence chunks to retrieve (default: 7)"
     )
 
     parser.add_argument(
         "--model",
-        default=DEFAULT_MODEL
+        default=DEFAULT_MODEL,
+        help=f"Ollama model to use (default: {DEFAULT_MODEL})"
     )
 
     args = parser.parse_args()
