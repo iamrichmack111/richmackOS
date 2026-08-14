@@ -1166,6 +1166,260 @@ def build_video(
 # CHANNEL INDEX
 ###############################################################################
 
+def _load_json_file(
+    path,
+    default
+):
+    if not path.exists():
+        return default
+
+    try:
+        return json.loads(
+            path.read_text(
+                encoding="utf-8"
+            )
+        )
+    except Exception:
+        return default
+
+
+def _load_summary_preview(
+    video_dir,
+    limit=3000
+):
+    path = (
+        video_dir
+        / "summary.md"
+    )
+
+    if not path.exists():
+        return ""
+
+    return (
+        path.read_text(
+            encoding="utf-8",
+            errors="ignore"
+        )
+        [:limit]
+    )
+
+
+def _load_video_index_entry(
+    video_dir
+):
+    metadata_path = (
+        video_dir
+        / "metadata.json"
+    )
+
+    if not metadata_path.exists():
+        return None
+
+    meta = _load_json_file(
+        metadata_path,
+        None
+    )
+
+    if not isinstance(
+        meta,
+        dict
+    ):
+        return None
+
+    keywords = _load_json_file(
+        video_dir
+        / "keywords.json",
+        []
+    )
+
+    if not isinstance(
+        keywords,
+        list
+    ):
+        keywords = []
+
+    return {
+        "video_id":
+            meta.get(
+                "video_id"
+            ),
+
+        "title":
+            meta.get(
+                "title"
+            ),
+
+        "upload_date":
+            meta.get(
+                "upload_date"
+            ),
+
+        "url":
+            meta.get(
+                "url"
+            ),
+
+        "keywords":
+            keywords,
+
+        "summary_preview":
+            _load_summary_preview(
+                video_dir
+            ),
+    }
+
+
+def _collect_channel_entries(
+    videos_root
+):
+    entries = []
+
+    if not videos_root.exists():
+        return entries
+
+    for video_dir in (
+        videos_root.iterdir()
+    ):
+        if not video_dir.is_dir():
+            continue
+
+        entry = _load_video_index_entry(
+            video_dir
+        )
+
+        if entry is None:
+            continue
+
+        entries.append(
+            entry
+        )
+
+    entries.sort(
+        key=lambda item:
+            item.get(
+                "upload_date",
+                ""
+            ),
+        reverse=True
+    )
+
+    return entries
+
+
+def _score_channel_topics(
+    entries
+):
+    topic_scores = Counter()
+    topic_videos = {}
+
+    for item in entries:
+        video_id = item.get(
+            "video_id",
+            ""
+        )
+
+        for position, topic in enumerate(
+            item.get(
+                "keywords",
+                []
+            )
+        ):
+            if not topic:
+                continue
+
+            key = topic.lower()
+
+            weight = max(
+                1,
+                40 - position
+            )
+
+            if len(
+                topic.split()
+            ) >= 2:
+                weight += 15
+
+            topic_scores[
+                topic
+            ] += weight
+
+            topic_videos.setdefault(
+                key,
+                set()
+            ).add(
+                video_id
+            )
+
+    return (
+        topic_scores,
+        topic_videos,
+    )
+
+
+def _rank_channel_topics(
+    topic_scores
+):
+    return sorted(
+        topic_scores.items(),
+        key=lambda item: (
+            item[1],
+            len(item[0].split()),
+            len(item[0])
+        ),
+        reverse=True
+    )
+
+
+def _build_channel_topics(
+    entries,
+    limit=100
+):
+    (
+        topic_scores,
+        topic_videos,
+    ) = _score_channel_topics(
+        entries
+    )
+
+    ranked_topics = _rank_channel_topics(
+        topic_scores
+    )
+
+    topics = []
+    seen = set()
+
+    for topic, score in ranked_topics:
+        key = topic.lower()
+
+        if key in seen:
+            continue
+
+        seen.add(
+            key
+        )
+
+        topics.append({
+            "topic":
+                topic,
+
+            "video_count":
+                len(
+                    topic_videos.get(
+                        key,
+                        set()
+                    )
+                ),
+
+            "score":
+                score,
+        })
+
+        if len(topics) >= limit:
+            break
+
+    return topics
+
+
 def build_channel_index(
     channel_key,
     channel_name
@@ -1180,103 +1434,8 @@ def build_channel_index(
         / "videos"
     )
 
-    entries = []
-
-    if videos_root.exists():
-        for video_dir in (
-            videos_root.iterdir()
-        ):
-            if not video_dir.is_dir():
-                continue
-
-            metadata_path = (
-                video_dir
-                / "metadata.json"
-            )
-
-            if not metadata_path.exists():
-                continue
-
-            try:
-                meta = json.loads(
-                    metadata_path.read_text(
-                        encoding="utf-8"
-                    )
-                )
-
-            except Exception:
-                continue
-
-            keywords = []
-
-            keyword_path = (
-                video_dir
-                / "keywords.json"
-            )
-
-            if keyword_path.exists():
-                try:
-                    keywords = json.loads(
-                        keyword_path.read_text(
-                            encoding="utf-8"
-                        )
-                    )
-
-                except Exception:
-                    pass
-
-            summary = ""
-
-            summary_path = (
-                video_dir
-                / "summary.md"
-            )
-
-            if summary_path.exists():
-                summary = (
-                    summary_path
-                    .read_text(
-                        encoding="utf-8",
-                        errors="ignore"
-                    )
-                    [:3000]
-                )
-
-            entries.append({
-                "video_id":
-                    meta.get(
-                        "video_id"
-                    ),
-
-                "title":
-                    meta.get(
-                        "title"
-                    ),
-
-                "upload_date":
-                    meta.get(
-                        "upload_date"
-                    ),
-
-                "url":
-                    meta.get(
-                        "url"
-                    ),
-
-                "keywords":
-                    keywords,
-
-                "summary_preview":
-                    summary,
-            })
-
-    entries.sort(
-        key=lambda item:
-            item.get(
-                "upload_date",
-                ""
-            ),
-        reverse=True
+    entries = _collect_channel_entries(
+        videos_root
     )
 
     index = {
@@ -1301,92 +1460,12 @@ def build_channel_index(
         index
     )
 
-    topic_scores = Counter()
-    topic_videos = {}
-
-    for item in entries:
-        video_id = item.get(
-            "video_id",
-            ""
-        )
-
-        for position, topic in enumerate(
-            item.get(
-                "keywords",
-                []
-            )
-        ):
-            if not topic:
-                continue
-
-            key = topic.lower()
-
-            # Higher-ranked topics inside each video are worth more.
-            weight = max(
-                1,
-                40 - position
-            )
-
-            # Multi-word topics get a bonus because they are usually
-            # more informative than generic single terms.
-            words = topic.split()
-
-            if len(words) >= 2:
-                weight += 15
-
-            topic_scores[
-                topic
-            ] += weight
-
-            topic_videos.setdefault(
-                key,
-                set()
-            ).add(
-                video_id
-            )
-
-    ranked_topics = sorted(
-        topic_scores.items(),
-        key=lambda item: (
-            item[1],
-            len(item[0].split()),
-            len(item[0])
-        ),
-        reverse=True
-    )
-
-    topics = []
-
-    seen = set()
-
-    for topic, score in ranked_topics:
-        key = topic.lower()
-
-        if key in seen:
-            continue
-
-        seen.add(
-            key
-        )
-
-        topics.append({
-            "topic": topic,
-            "video_count": len(
-                topic_videos.get(
-                    key,
-                    set()
-                )
-            ),
-            "score": score,
-        })
-
-        if len(topics) >= 100:
-            break
-
     write_json(
         channel_root
         / "topics.json",
-        topics
+        _build_channel_topics(
+            entries
+        )
     )
 
 
