@@ -20,6 +20,13 @@ PLUGINS = BASE / "plugins"
 
 OLLAMA = "http://richmack.local:11434"
 DEFAULT_MODEL = "huihui_ai/granite4.1-abliterated:3b"
+VERSION = "0.6.0"
+
+SKIP_DIRS = {
+    ".git", ".cache", ".config", ".local", ".ssh", ".gnupg",
+    ".richmackos", ".richmack-rag", "node_modules", "__pycache__",
+    ".venv", "venv"
+}
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -37,6 +44,7 @@ def color(text, c):
 
 
 def connect():
+    BASE.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB)
 
     con.execute("""
@@ -220,99 +228,89 @@ def detect_language(root):
 def scan(root):
     root = Path(root).expanduser().resolve()
 
-    if not root.exists():
-        print(color(f"Path not found: {root}", RED))
+    if not root.exists() or not root.is_dir():
+        print(color(f"Path not found or not a directory: {root}", RED))
         return
 
     con = connect()
     files = 0
     projects_seen = set()
+    seen_paths = set()
 
     print(color(f"\nScanning {root}", CYAN))
 
     for current, dirs, names in os.walk(root):
-        dirs[:] = [
-            d for d in dirs
-            if d not in {
-                ".git",
-                "node_modules",
-                ".cache",
-                "__pycache__",
-                ".venv",
-                "venv"
-            }
-        ]
-
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
         current_path = Path(current)
+
+        # Never index RichmackOS' own runtime state, even if scan starts at HOME.
+        try:
+            if current_path == BASE or BASE in current_path.parents:
+                dirs[:] = []
+                continue
+        except Exception:
+            pass
 
         if (current_path / ".git").exists():
             info = git_info(current_path)
-
             if info and info["root"] not in projects_seen:
                 projects_seen.add(info["root"])
-
                 language = detect_language(info["root"])
-
                 con.execute("""
                     INSERT OR REPLACE INTO projects
                     (path, name, language, remote, branch, dirty,
                      last_commit, indexed_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    info["root"],
-                    Path(info["root"]).name,
-                    language,
-                    info["remote"],
-                    info["branch"],
-                    int(info["dirty"]),
-                    info["last_commit"],
-                    datetime.now().isoformat()
+                    info["root"], Path(info["root"]).name, language,
+                    info["remote"], info["branch"], int(info["dirty"]),
+                    info["last_commit"], datetime.now().isoformat()
                 ))
 
         for name in names:
             path = current_path / name
-
             try:
+                if path.is_symlink() or not path.is_file():
+                    continue
                 st = path.stat()
             except Exception:
                 continue
 
+            seen_paths.add(str(path))
             category = classify(path)
-
             con.execute("""
                 INSERT OR REPLACE INTO files
                 (path, name, extension, size, mtime,
                  category, indexed_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
-                str(path),
-                path.name,
-                path.suffix.lower(),
-                st.st_size,
-                st.st_mtime,
-                category,
-                datetime.now().isoformat()
+                str(path), path.name, path.suffix.lower(), st.st_size,
+                st.st_mtime, category, datetime.now().isoformat()
             ))
-
             files += 1
-
             if files % 250 == 0:
-                print(
-                    f"\r{GREEN}Indexed {files:,} files...{RESET}",
-                    end="",
-                    flush=True
-                )
+                print(f"\r{GREEN}Indexed {files:,} files...{RESET}", end="", flush=True)
+
+    # Remove stale records beneath this scan root so search results track reality.
+    prefix = str(root).rstrip(os.sep) + os.sep
+    existing = con.execute(
+        "SELECT path FROM files WHERE path = ? OR path LIKE ?",
+        (str(root), prefix + "%")
+    ).fetchall()
+    stale = [(path,) for (path,) in existing if path not in seen_paths]
+    if stale:
+        con.executemany("DELETE FROM files WHERE path = ?", stale)
 
     con.commit()
     con.close()
-
-    print(
-        f"\r{GREEN}{BOLD}✓ Indexed {files:,} files "
-        f"and {len(projects_seen)} Git repositories.{RESET}"
-    )
+    print(f"\r{GREEN}{BOLD}✓ Indexed {files:,} files and {len(projects_seen)} Git repositories; removed {len(stale)} stale entries.{RESET}")
 
 
 def search(term):
+    term = term.strip()
+    if not term:
+        print(color("Usage: richmack search QUERY", YELLOW))
+        return
     con = connect()
 
     rows = con.execute("""
@@ -368,6 +366,10 @@ def repos():
 
 
 def remember(text):
+    text = text.strip()
+    if not text:
+        print(color('Usage: richmack remember "TEXT"', YELLOW))
+        return
     con = connect()
 
     con.execute(
@@ -410,17 +412,21 @@ def memories(term=None):
 
 
 def forget(ident):
+    try:
+        ident = int(ident)
+    except (TypeError, ValueError):
+        print(color("Memory ID must be an integer.", RED))
+        return
+
     con = connect()
-
-    con.execute(
-        "DELETE FROM memory WHERE id = ?",
-        (ident,)
-    )
-
+    cur = con.execute("DELETE FROM memory WHERE id = ?", (ident,))
     con.commit()
     con.close()
 
-    print(color(f"✓ Forgot memory {ident}.", GREEN))
+    if cur.rowcount:
+        print(color(f"✓ Forgot memory {ident}.", GREEN))
+    else:
+        print(color(f"Memory {ident} not found.", YELLOW))
 
 
 def large_files(limit=20):
@@ -641,7 +647,17 @@ def doctor():
         )
 
 
+def valid_skill_name(name):
+    return bool(name) and all(ch.isalnum() or ch in "-_" for ch in name)
+
+
 def skill_add(name, command):
+    if not valid_skill_name(name):
+        print(color("Skill names may only contain letters, numbers, - and _.", RED))
+        return
+    if not command.strip():
+        print(color('Usage: richmack skill add NAME "COMMAND"', YELLOW))
+        return
     path = SKILLS / f"{name}.skill"
 
     path.write_text(command + "\n")
@@ -660,6 +676,9 @@ def skill_list():
 
 
 def skill_show(name):
+    if not valid_skill_name(name):
+        print(color("Invalid skill name.", RED))
+        return
     path = SKILLS / f"{name}.skill"
 
     if not path.exists():
@@ -670,6 +689,9 @@ def skill_show(name):
 
 
 def skill_run(name):
+    if not valid_skill_name(name):
+        print(color("Invalid skill name.", RED))
+        return
     path = SKILLS / f"{name}.skill"
 
     if not path.exists():
@@ -817,11 +839,12 @@ Include:
 
 def help_screen():
     print(f"""
-{BOLD}{CYAN}RichmackOS{RESET}
+{BOLD}{CYAN}RichmackOS v{VERSION}{RESET}
 
 {BOLD}System{RESET}
   richmack status
   richmack doctor
+  richmack version
 
 {BOLD}Index & Search{RESET}
   richmack scan PATH
@@ -839,37 +862,27 @@ def help_screen():
   richmack recall QUERY
   richmack forget ID
 
-{BOLD}Skills{RESET}
+{BOLD}Skills & Plugins{RESET}
   richmack skill add NAME "COMMAND"
-  richmack skill list
-  richmack skill show NAME
-  richmack skill run NAME
-
-{BOLD}Plugins{RESET}
+  richmack skill list|show|run NAME
   richmack plugins
 
-{BOLD}AI{RESET}
+{BOLD}AI / Knowledge{RESET}
   richmack ai "QUESTION"
   richmack chat
   richmack rag "QUESTION"
+  richmack youtube --help
+
+{BOLD}Automation / Files{RESET}
+  richmack watch status|start|stop|restart|log|follow
+  richmack organize --help
 """)
 
 
 def main():
-    BASE.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    SKILLS.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    PLUGINS.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    BASE.mkdir(parents=True, exist_ok=True)
+    SKILLS.mkdir(parents=True, exist_ok=True)
+    PLUGINS.mkdir(parents=True, exist_ok=True)
 
     if len(sys.argv) < 2:
         help_screen()
@@ -878,109 +891,46 @@ def main():
     cmd = sys.argv[1]
     args = sys.argv[2:]
 
-    if cmd == "status":
-        system_status()
-
-    elif cmd == "doctor":
-        doctor()
-
-    elif cmd == "scan":
-        scan(
-            args[0] if args else HOME
-        )
-
-    elif cmd == "search":
-        search(
-            " ".join(args)
-        )
-
-    elif cmd == "repos":
-        repos()
-
-    elif cmd == "large":
-        large_files()
-
-    elif cmd == "duplicates":
-        duplicate_candidates()
-
-    elif cmd == "remember":
-        remember(
-            " ".join(args)
-        )
-
-    elif cmd in {"memories", "memory"}:
-        memories()
-
-    elif cmd == "recall":
-        memories(
-            " ".join(args)
-        )
-
+    if cmd == "status": system_status()
+    elif cmd == "doctor": doctor()
+    elif cmd in {"version", "-V", "--version"}: print(f"RichmackOS v{VERSION}")
+    elif cmd == "scan": scan(args[0] if args else HOME)
+    elif cmd == "search": search(" ".join(args))
+    elif cmd == "repos": repos()
+    elif cmd == "large": large_files()
+    elif cmd == "duplicates": duplicate_candidates()
+    elif cmd == "remember": remember(" ".join(args))
+    elif cmd in {"memories", "memory"}: memories()
+    elif cmd == "recall": memories(" ".join(args).strip() or None)
     elif cmd == "forget":
-        forget(
-            int(args[0])
-        )
-
-    elif cmd == "skill":
         if not args:
+            print(color("Usage: richmack forget ID", YELLOW))
+        else:
+            forget(args[0])
+    elif cmd == "skill":
+        if not args or args[0] == "list":
             skill_list()
-            return
-
-        action = args[0]
-
-        if action == "list":
-            skill_list()
-
-        elif action == "add":
-            skill_add(
-                args[1],
-                " ".join(args[2:])
-            )
-
-        elif action == "show":
-            skill_show(
-                args[1]
-            )
-
-        elif action == "run":
-            skill_run(
-                args[1]
-            )
-
-    elif cmd == "plugins":
-        plugin_list()
-
-    elif cmd == "readme":
-        readme_for_project(
-            args[0] if args else "."
-        )
-
-    elif cmd == "ai":
-        subprocess.run(
-            ["richmackai"] + args
-        )
-
-    elif cmd == "chat":
-        subprocess.run(
-            ["richmackai", "--chat"]
-        )
-
-    elif cmd == "rag":
-        subprocess.run(
-            ["richmackrag", "ask"] + args
-        )
-
-    elif cmd in {"help", "-h", "--help"}:
-        help_screen()
-
+        elif args[0] == "add":
+            if len(args) < 3:
+                print(color('Usage: richmack skill add NAME "COMMAND"', YELLOW))
+            else:
+                skill_add(args[1], " ".join(args[2:]))
+        elif args[0] == "show":
+            if len(args) < 2: print(color("Usage: richmack skill show NAME", YELLOW))
+            else: skill_show(args[1])
+        elif args[0] == "run":
+            if len(args) < 2: print(color("Usage: richmack skill run NAME", YELLOW))
+            else: skill_run(args[1])
+        else:
+            print(color(f"Unknown skill action: {args[0]}", RED))
+    elif cmd == "plugins": plugin_list()
+    elif cmd == "readme": readme_for_project(args[0] if args else ".")
+    elif cmd == "ai": subprocess.run(["richmackai"] + args, check=False)
+    elif cmd == "chat": subprocess.run(["richmackai", "--chat"], check=False)
+    elif cmd == "rag": subprocess.run(["richmackrag", "ask"] + args, check=False)
+    elif cmd in {"help", "-h", "--help"}: help_screen()
     else:
-        print(
-            color(
-                f"Unknown command: {cmd}",
-                RED
-            )
-        )
-
+        print(color(f"Unknown command: {cmd}", RED))
         help_screen()
 
 

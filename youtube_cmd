@@ -31,35 +31,106 @@ INGESTION
   sync --limit N
       Sync the newest N videos from every configured channel.
 
+      IMPORTANT:
+      After transcript sync completes, RichmackOS automatically runs:
+
+          richmack youtube knowledge build --all
+
+      This means normal sync also updates the structured
+      YouTube Knowledge Engine.
+
   sync --channel KEY --limit N
       Sync only one channel.
+
+      After synchronization, RichmackOS updates the
+      structured YouTube Knowledge Engine.
 
   status
       Show YouTube transcript ingestion status.
 
 
-KNOWLEDGE ENGINE
+KNOWLEDGE BUILDING
 
   knowledge build CHANNEL
       Build structured knowledge for one channel.
 
+      Example:
+
+          richmack youtube knowledge build tim-ferriss
+
   knowledge build CHANNEL --limit N
-      Build the newest N indexed videos.
+      Build only the newest N indexed videos.
+
+      Example:
+
+          richmack youtube knowledge build \
+            tim-ferriss \
+            --limit 5
 
   knowledge build --all
-      Build every configured channel.
+      Build structured knowledge for every configured channel.
+
+      Example:
+
+          richmack youtube knowledge build --all
+
+  knowledge build CHANNEL --force
+      Force a rebuild.
 
   knowledge build CHANNEL --force --no-summary
-      Rebuild deterministic data without rerunning Gemma summaries.
+      Rebuild deterministic knowledge without rerunning
+      Gemma summaries.
+
+      Example:
+
+          richmack youtube knowledge build \
+            tim-ferriss \
+            --limit 5 \
+            --force \
+            --no-summary
+
+
+VERIFY KNOWLEDGE
 
   knowledge status
-      Show structured knowledge status.
+      Show structured YouTube knowledge status.
+
+      Example:
+
+          richmack youtube knowledge status
 
   knowledge videos CHANNEL
-      List indexed videos.
+      List indexed videos for a channel.
+
+      Example:
+
+          richmack youtube knowledge videos tim-ferriss
 
   knowledge topics CHANNEL
       Show extracted concepts and topics.
+
+      Example:
+
+          richmack youtube knowledge topics tim-ferriss
+
+
+STRUCTURED KNOWLEDGE FLOW
+
+  YouTube
+      ↓
+  yt-dlp subtitles
+      ↓
+  cleaned transcript
+      ↓
+  ~/Knowledge-Inbox/YouTube/
+      ↓
+  RichmackRAG
+      ↓
+  YouTube Knowledge Engine
+      ↓
+  metadata / transcript / chunks / topics / resources
+      ↓
+  transcript-first evidence chat
 
 
 SEARCH / RAG
@@ -71,7 +142,7 @@ SEARCH / RAG
       Ask a scoped RAG question.
 
   ask CHANNEL --latest "QUESTION"
-      Restrict the question to the latest transcript.
+      Restrict the question to the newest transcript.
 
 
 SUMMARIES
@@ -91,14 +162,9 @@ EVIDENCE CHAT
   chat CHANNEL
       Open transcript-first interactive evidence chat.
 
+      Example:
 
-DISCOVERY
-
-  workflow
-      Show the recommended RichmackOS YouTube workflow.
-
-  examples
-      Show example commands and example chat questions.
+          richmack youtube chat tim-ferriss
 
 
 CHAT FEATURES
@@ -131,32 +197,88 @@ INSIDE YOUTUBE CHAT
       Exit chat.
 
 
-QUICK START
+NORMAL WORKFLOW
 
-  richmack youtube sync --limit 3
+  1. Sync recent videos:
 
-  richmack youtube knowledge build tim-ferriss --limit 5
+      richmack youtube sync --limit 3
+
+     This automatically updates structured knowledge.
+
+  2. Optional manual rebuild:
+
+      richmack youtube knowledge build --all
+
+  3. Verify knowledge:
+
+      richmack youtube knowledge status
+
+  4. Inspect videos:
+
+      richmack youtube knowledge videos tim-ferriss
+
+  5. Inspect topics:
+
+      richmack youtube knowledge topics tim-ferriss
+
+  6. Open evidence chat:
+
+      richmack youtube chat tim-ferriss
+
+  7. Ask:
+
+      what is the 4x4 protocol?
+
+  8. Inspect sources:
+
+      /sources
+
+  9. Generate a combined briefing:
+
+      richmack youtube summarize --all --limit 3 --combined
+
+
+DANNY JONES EXAMPLE
+
+  richmack youtube knowledge build \
+    danny-jones \
+    --limit 5
+
+  richmack youtube knowledge topics danny-jones
+
+  richmack youtube chat danny-jones
+
+  youtube> what are the main topics across the latest videos?
+
+  youtube> what is the most unusual claim discussed?
+
+  youtube> what else did they say about it?
+
+
+TIM FERRISS EXAMPLE
+
+  richmack youtube knowledge build \
+    tim-ferriss \
+    --limit 5
 
   richmack youtube knowledge videos tim-ferriss
 
-  richmack youtube knowledge topics tim-ferriss
-
   richmack youtube chat tim-ferriss
 
+  youtube> what is the 4x4 protocol?
 
-COMMON CHAT QUESTIONS
+  youtube> what else is mentioned?
 
-  what is the 4x4 protocol?
+  youtube> /sources
 
-  what else is mentioned?
 
-  what are the main topics across the latest videos?
+DISCOVERY
 
-  what is the most unusual claim discussed?
+  workflow
+      Show the recommended end-to-end workflow.
 
-  what else did they say about it?
-
-  tell me what they said about knights templar
+  examples
+      Show example commands and example chat questions.
 
 
 MORE HELP
@@ -164,6 +286,8 @@ MORE HELP
   richmack youtube workflow
 
   richmack youtube examples
+
+  richmack youtube chat --help
 
   man richmack
 HELP

@@ -517,7 +517,7 @@ AI is used when language understanding, classification, semantic retrieval, summ
 
 ## Current Version
 
-RichmackOS v0.1
+RichmackOS v0.6.0
 
 Current capabilities:
 
