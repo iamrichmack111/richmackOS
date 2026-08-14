@@ -1105,3 +1105,1858 @@ This separates normal AI chat from document-grounded RAG queries.
                     |
                     v
                  Ollama
+
+## YouTube Knowledge Ingestion
+
+RichmackOS can ingest recent YouTube subtitles from a curated channel list.
+
+Configured channels include:
+
+- Danny Jones
+- Tim Ferriss
+- Poetik Flakko
+- VladTV
+- Fireship
+- ESOTERICA
+- Chill Dude Explains
+
+List channels:
+
+    richmack youtube channels
+
+Sync the newest 10 videos from every configured channel:
+
+    richmack youtube sync
+
+Sync five videos per channel:
+
+    richmack youtube sync --limit 5
+
+Sync one channel:
+
+    richmack youtube sync --channel fireship
+
+Available channel keys include:
+
+    danny-jones
+    tim-ferriss
+    poetik-flakko
+    vladtv
+    fireship
+    esoterica
+    chill-dude-explains
+
+View state:
+
+    richmack youtube status
+
+Search saved transcript text:
+
+    richmack youtube search kubernetes
+
+### Workflow
+
+    YouTube channels
+          |
+          v
+    yt-dlp metadata/subtitles
+          |
+          v
+    VTT subtitle file
+          |
+          v
+    RichmackOS transcript cleaner
+          |
+          v
+    plain UTF-8 .txt transcript
+          |
+          v
+    ~/Knowledge-Inbox/YouTube/CHANNEL/
+          |
+          v
+    RichmackOS watcher
+          |
+          v
+    richmackrag index
+          |
+          v
+    embeddings on richmack.local
+          |
+          v
+    RAG database on Debian
+          |
+          v
+    richmack rag "QUESTION"
+
+Clean transcript files contain metadata including:
+
+- title
+- channel
+- video ID
+- YouTube URL
+- upload date
+- duration
+- description
+- transcript text
+
+The state database prevents already-ingested videos from being repeatedly
+downloaded.
+
+The default first sync is limited to the newest ten videos from each channel.
+Future syncs skip successfully indexed video IDs.
+
+Example RAG queries:
+
+    richmack rag "What has Fireship discussed recently about JavaScript?"
+
+    richmack rag "What themes come up in recent Danny Jones interviews?"
+
+    richmack rag "Compare recent discussions from Tim Ferriss and Danny Jones."
+
+    richmack rag "What does ESOTERICA say about Gnosticism?"
+
+YouTube transcripts are stored under:
+
+    ~/Knowledge-Inbox/YouTube
+
+Ingestion state is stored at:
+
+    ~/.richmackos/youtube-state.json
+
+## RAG Namespaces
+
+RichmackOS supports scoped RAG queries.
+
+Normal unscoped RAG remains available:
+
+    richmack rag "QUESTION"
+
+Scoped queries use:
+
+    richmack rag --scope SCOPE "QUESTION"
+
+Available scopes:
+
+    all
+    youtube
+    docs
+    projects
+    system
+
+Examples:
+
+    richmack rag --scope youtube \
+        "What have my YouTube transcripts said about robotics?"
+
+    richmack rag --scope docs \
+        "What do my personal documents say about IAM?"
+
+    richmack rag --scope projects \
+        "How does RichmackOS perform file organization?"
+
+    richmack rag --scope system \
+        "What CPU does this Debian server use?"
+
+The purpose of scopes is to prevent unrelated documents from outranking the
+documents relevant to the question.
+
+### Scope Layout
+
+youtube:
+
+    ~/Knowledge-Inbox/YouTube/
+
+docs:
+
+    ~/Knowledge-Inbox/
+    ~/Documents/
+
+The YouTube subtree is excluded from the docs scope.
+
+projects:
+
+    ~/Projects/
+    ~/RichmackOS/
+
+system:
+
+    ~/Readme/
+    ~/computer-specs.txt
+
+## YouTube Time and Video Filters
+
+YouTube RAG queries can be restricted by channel and time.
+
+Latest transcript:
+
+    richmack youtube ask fireship --latest \
+        "What did this video discuss?"
+
+Recent videos:
+
+    richmack youtube ask danny-jones --days 30 \
+        "What subjects came up most often?"
+
+Since a date:
+
+    richmack youtube ask tim-ferriss --since 2026-08-01 \
+        "What themes were discussed?"
+
+One specific video:
+
+    richmack youtube ask fireship --video VIDEO_ID \
+        "Summarize this video."
+
+Filters can be combined where sensible.
+
+For example:
+
+    richmack youtube ask esoterica \
+        --days 90 \
+        "What religious traditions were discussed?"
+
+The YouTube query engine searches only transcript chunks belonging to the
+selected channel and selected video/date range.
+
+This prevents unrelated RichmackOS documentation or personal documents from
+being included in YouTube answers.
+
+### Updated Knowledge Architecture
+
+    RAG Database
+        |
+        +-- youtube namespace
+        |
+        +-- docs namespace
+        |
+        +-- projects namespace
+        |
+        +-- system namespace
+        |
+        +-- all
+
+Queries can therefore select the most appropriate knowledge domain before
+semantic retrieval occurs.
+
+## YouTube Research Mode
+
+RichmackOS includes a multi-pass research extraction engine.
+
+Unlike the normal summarizer, Research Mode does not depend on the LLM
+to format the final report.
+
+The model performs several focused extraction passes and RichmackOS
+renders the final Markdown and JSON deterministically.
+
+### Research One Channel
+
+    richmack youtube research chill-dude-explains --limit 3
+
+### Research Fireship
+
+    richmack youtube research fireship --limit 5
+
+### Research Every Channel
+
+    richmack youtube research --all --limit 3
+
+### Research Recent Videos
+
+    richmack youtube research danny-jones --days 30 --limit 10
+
+### Select Model
+
+    richmack youtube research chill-dude-explains \
+        --limit 3 \
+        --model gemma3:4b
+
+### Pipeline
+
+    transcripts
+        |
+        v
+    Pass 1 - detailed synthesis
+        |
+        v
+    Pass 2 - structured extraction
+        |
+        v
+    Pass 3 - research roadmap
+        |
+        v
+    deterministic renderer
+        |
+        +----> Markdown
+        |
+        +----> JSON
+
+### Extracted Knowledge
+
+Research Mode extracts:
+
+- detailed summary
+- channel overview
+- key themes
+- keywords
+- tags
+- resources
+- URLs
+- people
+- organizations
+- books
+- websites
+- tools
+- medical terminology
+- legal terminology
+- psychology terminology
+- technologies
+- research queries
+- notable claims
+- questions raised
+- topics requiring verification
+- concept relationships
+- practical takeaways
+- source-video metadata
+
+### Research Files
+
+Results are stored under:
+
+    ~/Knowledge/Research/youtube/CHANNEL/
+
+Each run creates:
+
+    YYYY-MM-DD_HHMMSS.md
+    YYYY-MM-DD_HHMMSS.json
+
+The newest research result is also copied to:
+
+    latest.md
+    latest.json
+
+The Markdown file is intended for human reading.
+
+The JSON file provides a structured knowledge layer for future
+RichmackOS search, comparison, cross-channel analysis, and AI tools.
+
+## Research Output Embedding
+
+RichmackOS YouTube Research Mode stores results under:
+
+    ~/Knowledge/Research/youtube/CHANNEL/
+
+Each research run creates:
+
+    YYYY-MM-DD_HHMMSS.md
+    YYYY-MM-DD_HHMMSS.json
+    latest.md
+    latest.json
+
+Because the RichmackOS watcher recursively monitors the user's home directory,
+and both `.md` and `.json` are supported RAG extensions, these research
+artifacts are automatically submitted to:
+
+    richmackrag index FILE
+
+This means both raw transcripts and derived research briefs become part of
+the local knowledge base.
+
+The resulting flow is:
+
+    YouTube transcript
+        |
+        v
+    Knowledge-Inbox
+        |
+        v
+    automatic embedding
+        |
+        v
+    Research Mode
+        |
+        +----> Markdown brief
+        |
+        +----> JSON knowledge object
+                    |
+                    v
+              automatic embedding
+                    |
+                    v
+              RichmackRAG
+
+This creates two searchable knowledge layers:
+
+1. raw source transcripts
+2. structured derived research
+
+Example queries:
+
+    richmack rag --scope youtube \
+      "What has Chill Dude Explains said about crowd crush?"
+
+    richmack rag \
+      "What resources were extracted from Chill Dude Explains?"
+
+    richmack rag \
+      "What topics should I research further from my YouTube research briefs?"
+
+The raw transcript remains the primary source record.
+
+Research briefs are model-generated derived artifacts and should be treated
+as summaries and extracted knowledge rather than original source text.
+
+## Multi-Pass YouTube Research
+
+Research Mode now splits knowledge extraction into focused passes:
+
+    deterministic URL extraction
+    summary
+    keywords
+    entities
+    resources
+    research roadmap
+    merge
+    final Markdown / JSON
+
+This is designed to improve reliability with smaller local models such as
+Gemma 3 4B.
+
+Run:
+
+    richmack youtube research chill-dude-explains --limit 3
+
+Artifacts:
+
+    ~/Knowledge/Research/youtube/CHANNEL/runs/TIMESTAMP/summary.json
+    ~/Knowledge/Research/youtube/CHANNEL/runs/TIMESTAMP/keywords.json
+    ~/Knowledge/Research/youtube/CHANNEL/runs/TIMESTAMP/entities.json
+    ~/Knowledge/Research/youtube/CHANNEL/runs/TIMESTAMP/resources.json
+    ~/Knowledge/Research/youtube/CHANNEL/runs/TIMESTAMP/research.json
+    ~/Knowledge/Research/youtube/CHANNEL/runs/TIMESTAMP/final.json
+    ~/Knowledge/Research/youtube/CHANNEL/runs/TIMESTAMP/final.md
+
+Convenience copies:
+
+    ~/Knowledge/Research/youtube/CHANNEL/latest.json
+    ~/Knowledge/Research/youtube/CHANNEL/latest.md
+
+### Resource-Only Analysis
+
+    richmack youtube resources chill-dude-explains --limit 3
+
+This extracts:
+
+- URLs
+- named resources
+- tools
+- apps
+- courses
+- training programs
+- procedures
+- frameworks
+- useful search terms
+
+Explicit URLs are extracted deterministically before model analysis.
+
+## YouTube Knowledge System
+
+RichmackOS can ingest, summarize, search, and chat with a configurable set of
+YouTube channels.
+
+The YouTube pipeline uses:
+
+    yt-dlp
+        ↓
+    subtitles / auto-subtitles
+        ↓
+    VTT cleanup
+        ↓
+    plain-text transcripts
+        ↓
+    ~/Knowledge-Inbox/YouTube/
+        ↓
+    RichmackOS watcher
+        ↓
+    RichmackRAG
+        ↓
+    embeddings on richmack.local
+        ↓
+    semantic search and AI queries
+
+The default YouTube summarizer model is:
+
+    gemma3:4b
+
+This model runs through Ollama on:
+
+    http://richmack.local:11434
+
+### Configured Channels
+
+Channels are stored in:
+
+    ~/.richmackos/youtube-channels.json
+
+List configured channels:
+
+    richmack youtube channels
+
+Add a channel from the command line:
+
+    richmack youtube add-channel \
+      channel-key \
+      "Display Name" \
+      "https://www.youtube.com/@channel/videos"
+
+Example:
+
+    richmack youtube add-channel \
+      renaissance-periodization \
+      "Renaissance Periodization" \
+      "https://www.youtube.com/@RenaissancePeriodization/videos"
+
+Remove a channel:
+
+    richmack youtube remove-channel channel-key
+
+### Synchronizing Videos
+
+Sync recent videos from every configured channel:
+
+    richmack youtube sync --limit 3
+
+Sync one channel:
+
+    richmack youtube sync \
+      --channel fireship \
+      --limit 3
+
+RichmackOS stores cleaned transcripts beneath:
+
+    ~/Knowledge-Inbox/YouTube/
+
+Already-ingested video IDs are tracked so future syncs can skip duplicates.
+
+### Automatic RAG Indexing
+
+Clean transcript `.txt` files are automatically noticed by the RichmackOS
+filesystem watcher.
+
+The workflow is:
+
+    new transcript
+        ↓
+    filesystem watcher
+        ↓
+    local filesystem index
+        ↓
+    richmackrag index
+        ↓
+    remote embedding request
+        ↓
+    richmack.local
+        ↓
+    vectors returned to Debian
+        ↓
+    ~/.richmack-rag/rag.db
+
+This makes new transcript material searchable without manually running a RAG
+index command.
+
+### YouTube Search
+
+Search saved transcript text:
+
+    richmack youtube search robotics
+
+### Scoped YouTube RAG
+
+Ask a question about one channel:
+
+    richmack youtube ask fireship \
+      "What programming topics are discussed?"
+
+Restrict the question to the latest transcript:
+
+    richmack youtube ask fireship \
+      --latest \
+      "What did this video discuss?"
+
+The YouTube ask command is scoped so unrelated RichmackOS documentation and
+other documents are not included in retrieval.
+
+### Detailed Channel Summaries
+
+Summarize the latest three transcripts from one channel:
+
+    richmack youtube summarize \
+      chill-dude-explains \
+      --limit 3
+
+Summarize all configured channels:
+
+    richmack youtube summarize \
+      --all \
+      --limit 3
+
+The summarizer displays progress while reading transcripts, preparing context,
+and generating the response.
+
+### Combined Cross-Channel Summary
+
+Generate individual summaries for every configured channel and then create a
+single combined briefing:
+
+    richmack youtube summarize \
+      --all \
+      --limit 3 \
+      --combined
+
+The combined briefing can identify:
+
+- recurring themes
+- relationships among channels
+- major differences
+- keywords
+- tags
+- people and organizations
+- resources mentioned
+- things to look up
+- notable claims
+- practical takeaways
+
+### Interactive YouTube Chat
+
+Open an interactive chat grounded in one channel:
+
+    richmack youtube chat chill-dude-explains
+
+Open a chat across all configured channels:
+
+    richmack youtube chat --all
+
+The chat uses Gemma 3 4B by default and maintains conversational history during
+the session.
+
+Available interactive commands:
+
+    /clear
+    /quit
+
+The chat shows a progress bar while generating each answer.
+
+Source material is treated as untrusted data. Instructions appearing inside
+transcripts are not intended to override RichmackOS system behavior.
+
+### Recommended YouTube Workflow
+
+    1. Add channels
+
+       richmack youtube add-channel KEY "NAME" URL
+
+    2. Sync recent uploads
+
+       richmack youtube sync --limit 3
+
+    3. Summarize one channel
+
+       richmack youtube summarize CHANNEL --limit 3
+
+    4. Summarize all channels
+
+       richmack youtube summarize --all --limit 3
+
+    5. Produce a combined briefing
+
+       richmack youtube summarize --all --limit 3 --combined
+
+    6. Ask RAG questions
+
+       richmack youtube ask CHANNEL "QUESTION"
+
+    7. Open an interactive chat
+
+       richmack youtube chat CHANNEL
+
+       or:
+
+       richmack youtube chat --all
+
+This preserves a simple architecture:
+
+    deterministic ingestion
+        ↓
+    local transcript storage
+        ↓
+    automatic embeddings
+        ↓
+    scoped RAG
+        ↓
+    summaries
+        ↓
+    interactive chat
+
+The experimental multi-pass research pipeline is not part of the active
+YouTube workflow.
+
+<!-- RICHMACK_YOUTUBE_V2_START -->
+
+# RichmackOS YouTube Knowledge Engine v2
+
+RichmackOS turns configured YouTube channels into a persistent,
+queryable local knowledge system.
+
+~~text
+RICHMACKOS YOUTUBE KNOWLEDGE ENGINE V2
+======================================
+
+
+ARCHITECTURE
+------------
+
+YouTube Channel
+      ↓
+yt-dlp subtitles / auto-subtitles
+      ↓
+clean Richmack transcript
+      ↓
+~/Knowledge-Inbox/YouTube/
+      ↓
+RichmackOS filesystem watcher
+      ↓
+RichmackRAG automatic indexing
+      ↓
+YouTube Knowledge Engine
+      ↓
+per-video structured knowledge
+      ↓
+channel index + topic index
+      ↓
+transcript-first evidence retrieval
+      ↓
+Gemma 3 4B
+      ↓
+cited answer
+
+
+DEFAULT MODEL
+-------------
+
+gemma3:4b
+
+
+OLLAMA ENDPOINT
+---------------
+
+http://richmack.local:11434
+
+
+============================================================
+CHANNEL MANAGEMENT
+============================================================
+
+Show configured channels:
+
+richmack youtube channels
+
+
+Add a channel:
+
+richmack youtube add-channel \
+  CHANNEL_KEY \
+  "Display Name" \
+  "https://www.youtube.com/@Channel/videos"
+
+
+Example:
+
+richmack youtube add-channel \
+  renaissance-periodization \
+  "Renaissance Periodization" \
+  "https://www.youtube.com/@RenaissancePeriodization/videos"
+
+
+Remove a channel:
+
+richmack youtube remove-channel CHANNEL_KEY
+
+
+Channel configuration:
+
+~/.richmackos/youtube-channels.json
+
+
+============================================================
+YOUTUBE SYNC
+============================================================
+
+Sync newest videos from ALL configured channels:
+
+richmack youtube sync --limit 3
+
+
+Sync one channel:
+
+richmack youtube sync \
+  --channel tim-ferriss \
+  --limit 3
+
+
+The active RichmackOS workflow is:
+
+sync
+ ↓
+download subtitles
+ ↓
+clean transcript
+ ↓
+Knowledge-Inbox
+ ↓
+automatic RichmackRAG indexing
+ ↓
+YouTube Knowledge Engine build
+ ↓
+persistent structured knowledge
+
+
+Future sync operations automatically update the structured
+YouTube Knowledge Engine.
+
+
+============================================================
+KNOWLEDGE ENGINE
+============================================================
+
+Build one channel:
+
+richmack youtube knowledge build tim-ferriss
+
+
+Build newest five videos:
+
+richmack youtube knowledge build \
+  tim-ferriss \
+  --limit 5
+
+
+Build every configured channel:
+
+richmack youtube knowledge build --all
+
+
+Force rebuild:
+
+richmack youtube knowledge build \
+  tim-ferriss \
+  --limit 5 \
+  --force
+
+
+Rebuild deterministic knowledge without rerunning Gemma summaries:
+
+richmack youtube knowledge build \
+  tim-ferriss \
+  --limit 5 \
+  --force \
+  --no-summary
+
+
+Show Knowledge Engine status:
+
+richmack youtube knowledge status
+
+
+List indexed videos:
+
+richmack youtube knowledge videos tim-ferriss
+
+
+Show extracted topics:
+
+richmack youtube knowledge topics tim-ferriss
+
+
+============================================================
+STRUCTURED KNOWLEDGE STORAGE
+============================================================
+
+Knowledge root:
+
+~/Knowledge/YouTube/
+
+
+Per-channel structure:
+
+~/Knowledge/YouTube/<channel-key>/
+
+
+Per-video structure:
+
+~/Knowledge/YouTube/<channel-key>/videos/<video-id>/
+
+
+Example:
+
+~/Knowledge/YouTube/tim-ferriss/
+├── index.json
+├── topics.json
+└── videos/
+    ├── jjkfMPi0BXI/
+    │   ├── metadata.json
+    │   ├── description.txt
+    │   ├── transcript.txt
+    │   ├── chunks.json
+    │   ├── keywords.json
+    │   ├── resources.json
+    │   └── summary.md
+    │
+    └── ...
+
+
+metadata.json
+    Video metadata.
+
+description.txt
+    YouTube video description.
+
+transcript.txt
+    Spoken transcript content.
+
+chunks.json
+    Transcript chunks used by retrieval.
+
+keywords.json
+    Extracted high-value topics and concepts.
+
+resources.json
+    Deterministically discovered resources and URLs.
+
+summary.md
+    Saved AI-generated video summary.
+
+index.json
+    Channel-level video index.
+
+topics.json
+    Channel-level topic index.
+
+
+============================================================
+TOPIC EXTRACTION
+============================================================
+
+The topic system is designed to prefer meaningful concepts,
+named entities, technical terminology, and multi-word phrases.
+
+Examples:
+
+Guy Oseary
+Suno
+Madonna
+Area 51
+DMT
+DMTX
+Nephilim
+Knights Templar
+Rothschilds
+Norwegian 4x4
+VO2 Max
+BPC-157
+growth hormone
+Claude
+LLMs
+angel investing
+
+
+Conversational filler is filtered.
+
+Examples of rejected topic noise:
+
+yeah
+mhm
+wow
+just
+there
+ive
+youve
+uh
+um
+laughter
+okay
+well
+
+
+============================================================
+TRANSCRIPT-FIRST EVIDENCE CHAT
+============================================================
+
+Open YouTube Knowledge Chat:
+
+richmack youtube chat tim-ferriss
+
+
+Example:
+
+youtube> what is the 4x4 protocol?
+
+
+Retrieval architecture:
+
+question
+ ↓
+channel isolation
+ ↓
+video routing
+ ↓
+transcript retrieval
+ ↓
+evidence packet
+ ↓
+Gemma
+ ↓
+answer
+ ↓
+evidence citations
+
+
+Transcript evidence takes priority over video descriptions.
+
+
+If spoken transcript evidence exists, RichmackOS should use it
+before considering description metadata.
+
+
+============================================================
+EVIDENCE
+============================================================
+
+Answers display evidence such as:
+
+Evidence:
+  [1] The 4x4 Protocol — TRANSCRIPT chunk 2
+  [2] The 4x4 Protocol — TRANSCRIPT chunk 3
+
+
+This allows the user to inspect where the response originated.
+
+
+Inside YouTube Chat:
+
+/help
+/video
+/sources
+/clear
+/quit
+
+
+/help
+    Display interactive chat commands.
+
+/video
+    Display the currently selected video.
+
+/sources
+    Display evidence used for the previous answer.
+
+/clear
+    Clear current video/follow-up context.
+
+/quit
+    Exit YouTube Knowledge Chat.
+
+
+============================================================
+FOLLOW-UP MEMORY
+============================================================
+
+RichmackOS can preserve the selected source video for
+contextual follow-up questions.
+
+
+Example:
+
+youtube> what is the most unusual claim discussed?
+
+youtube> what else did they say about it?
+
+
+The first question may search several videos.
+
+Once RichmackOS identifies the winning source video,
+the follow-up should remain attached to that video.
+
+
+Conceptually:
+
+channel-wide question
+      ↓
+analyze videos
+      ↓
+select source
+      ↓
+store VIDEO_ID
+      ↓
+follow-up question
+      ↓
+same VIDEO_ID
+      ↓
+fresh transcript retrieval
+
+
+Clearly new subjects may reroute.
+
+
+Example:
+
+youtube> tell me more about AI predictions
+
+
+may select a different episode.
+
+
+============================================================
+CHANNEL-WIDE QUESTIONS
+============================================================
+
+Questions referring to multiple videos use a different
+workflow from single-video questions.
+
+
+Example:
+
+youtube> what are the main topics across the latest videos?
+
+
+Instead of sending five large transcripts into one prompt:
+
+Video 1
+Video 2
+Video 3
+Video 4
+Video 5
+   ↓
+one overloaded Gemma prompt
+
+
+RichmackOS uses:
+
+Video 1
+   ↓
+per-video analysis
+
+Video 2
+   ↓
+per-video analysis
+
+Video 3
+   ↓
+per-video analysis
+
+Video 4
+   ↓
+per-video analysis
+
+Video 5
+   ↓
+per-video analysis
+
+        ↓
+
+small structured results
+
+        ↓
+
+final channel synthesis
+
+
+This is designed for small local models such as Gemma 3 4B.
+
+
+============================================================
+CROSS-VIDEO TOPIC EXAMPLE
+============================================================
+
+Command:
+
+richmack youtube chat danny-jones
+
+
+Question:
+
+youtube> what are the main topics across the latest videos?
+
+
+Expected conceptual output:
+
+Ido Portal
+    movement
+    perception
+    training
+    spatial awareness
+
+TD Barnes
+    Area 51
+    Air Force
+    classified programs
+    Cold War technology
+
+Gary Wayne
+    Nephilim
+    Knights Templar
+    biblical interpretation
+    Rothschild claims
+
+Carl Hayden Smith
+    DMT
+    DMTX
+    altered states
+    consciousness
+
+Greg Carlwood
+    conspiracy culture
+    paranormal claims
+    alternative history
+
+
+Then:
+
+Cross-video themes
+    unconventional beliefs
+    hidden institutions
+    consciousness
+    historical claims
+    personal testimony
+
+
+============================================================
+CLAIM ANALYSIS
+============================================================
+
+Channel-wide claim question:
+
+youtube> what is the most unusual claim discussed?
+
+
+RichmackOS performs:
+
+Video 1
+ ↓
+candidate claim
+
+Video 2
+ ↓
+candidate claim
+
+Video 3
+ ↓
+candidate claim
+
+Video 4
+ ↓
+candidate claim
+
+Video 5
+ ↓
+candidate claim
+
+        ↓
+
+candidate comparison
+
+        ↓
+
+selected claim
+
+        ↓
+
+SOURCE_VIDEO_ID
+
+        ↓
+
+follow-up video lock
+
+
+A useful claim response includes:
+
+CLAIM
+WHO
+VIDEO
+WHY IT IS UNUSUAL
+STATUS
+EVIDENCE
+
+
+Claim classifications can include:
+
+ordinary factual statement
+personal observation
+personal experience
+anecdote
+interpretive claim
+scientific claim
+historical claim
+speculation
+paranormal claim
+conspiracy claim
+
+
+RichmackOS should distinguish:
+
+"The Knights Templar did..."
+
+from:
+
+"Gary Wayne claims that the Knights Templar..."
+
+
+The second form correctly describes what the transcript says
+without silently treating the guest's assertion as independently
+verified history.
+
+
+============================================================
+SCOPED RAG
+============================================================
+
+Ask a RAG question about one channel:
+
+richmack youtube ask \
+  fireship \
+  "What programming topics were discussed?"
+
+
+Ask only the latest transcript:
+
+richmack youtube ask \
+  fireship \
+  --latest \
+  "What did this video discuss?"
+
+
+Scoped retrieval prevents unrelated RichmackOS documents from
+entering a channel-specific answer.
+
+
+============================================================
+YOUTUBE SUMMARIES
+============================================================
+
+Summarize recent videos from one channel:
+
+richmack youtube summarize \
+  chill-dude-explains \
+  --limit 3
+
+
+Summarize all configured channels:
+
+richmack youtube summarize \
+  --all \
+  --limit 3
+
+
+Generate per-channel summaries followed by one combined briefing:
+
+richmack youtube summarize \
+  --all \
+  --limit 3 \
+  --combined
+
+
+Progress bars are displayed during model operations.
+
+
+============================================================
+COMBINED SUMMARY
+============================================================
+
+Architecture:
+
+Channel 1 transcripts
+      ↓
+Channel 1 summary
+
+Channel 2 transcripts
+      ↓
+Channel 2 summary
+
+Channel 3 transcripts
+      ↓
+Channel 3 summary
+
+        ↓
+
+cross-channel synthesis
+
+
+Possible combined output includes:
+
+overall themes
+cross-channel connections
+major differences
+keywords
+tags
+people
+organizations
+resources
+claims
+practical takeaways
+things to research
+
+
+============================================================
+AUTOMATIC DOCUMENT INGESTION
+============================================================
+
+YouTube transcripts are stored beneath:
+
+~/Knowledge-Inbox/YouTube/
+
+
+The RichmackOS filesystem watcher automatically detects
+supported text documents.
+
+
+Workflow:
+
+new transcript
+      ↓
+filesystem watcher
+      ↓
+filesystem index
+      ↓
+RichmackRAG
+      ↓
+remote embedding
+      ↓
+richmack.local
+      ↓
+vectors returned
+      ↓
+local RAG database
+
+
+No separate manual RAG indexing command should be required
+for supported transcript text.
+
+
+============================================================
+ADDING NEW CHANNELS
+============================================================
+
+Example:
+
+richmack youtube add-channel \
+  1090-jake \
+  "1090 Jake" \
+  "https://www.youtube.com/@EndOfSentence/videos"
+
+
+Example:
+
+richmack youtube add-channel \
+  renaissance-periodization \
+  "Renaissance Periodization" \
+  "https://www.youtube.com/@RenaissancePeriodization/videos"
+
+
+Verify:
+
+richmack youtube channels
+
+
+Then:
+
+richmack youtube sync \
+  --channel 1090-jake \
+  --limit 3
+
+
+Build knowledge:
+
+richmack youtube knowledge build \
+  1090-jake \
+  --limit 3
+
+
+Chat:
+
+richmack youtube chat 1090-jake
+
+
+============================================================
+RECOMMENDED DAILY WORKFLOW
+============================================================
+
+STEP 1
+Add channels when needed:
+
+richmack youtube add-channel \
+  KEY \
+  "Channel Name" \
+  "https://www.youtube.com/@Channel/videos"
+
+
+STEP 2
+Sync recent videos:
+
+richmack youtube sync --limit 3
+
+
+STEP 3
+Check knowledge status:
+
+richmack youtube knowledge status
+
+
+STEP 4
+Inspect one channel:
+
+richmack youtube knowledge videos tim-ferriss
+
+richmack youtube knowledge topics tim-ferriss
+
+
+STEP 5
+Open evidence chat:
+
+richmack youtube chat tim-ferriss
+
+
+STEP 6
+Ask a specific question:
+
+youtube> what is the Norwegian 4x4 protocol?
+
+
+STEP 7
+Ask for more context:
+
+youtube> what else is mentioned?
+
+
+STEP 8
+Inspect evidence:
+
+youtube> /sources
+
+
+STEP 9
+Ask a channel-wide question:
+
+richmack youtube chat danny-jones
+
+youtube> what are the main topics across the latest videos?
+
+
+STEP 10
+Compare claims:
+
+youtube> what is the most unusual claim discussed?
+
+youtube> what else did they say about it?
+
+
+STEP 11
+Generate summaries:
+
+richmack youtube summarize \
+  --all \
+  --limit 3
+
+
+STEP 12
+Generate a combined briefing:
+
+richmack youtube summarize \
+  --all \
+  --limit 3 \
+  --combined
+
+
+============================================================
+DEBUGGING / VERIFICATION
+============================================================
+
+Show channels:
+
+richmack youtube channels
+
+
+Show videos:
+
+richmack youtube knowledge videos CHANNEL
+
+
+Show topics:
+
+richmack youtube knowledge topics CHANNEL
+
+
+Open chat:
+
+richmack youtube chat CHANNEL
+
+
+Inside chat:
+
+/video
+/sources
+
+
+Inspect raw transcript:
+
+cat \
+  ~/Knowledge/YouTube/CHANNEL/videos/VIDEO_ID/transcript.txt
+
+
+Inspect metadata:
+
+python3 -m json.tool \
+  ~/Knowledge/YouTube/CHANNEL/videos/VIDEO_ID/metadata.json
+
+
+Inspect chunks:
+
+python3 -m json.tool \
+  ~/Knowledge/YouTube/CHANNEL/videos/VIDEO_ID/chunks.json
+
+
+Inspect resources:
+
+python3 -m json.tool \
+  ~/Knowledge/YouTube/CHANNEL/videos/VIDEO_ID/resources.json
+
+
+============================================================
+DESIGN PRINCIPLES
+============================================================
+
+1. SOURCE ISOLATION
+
+A Tim Ferriss chat should not silently retrieve VladTV.
+
+
+2. VIDEO ISOLATION
+
+A question about Guy Oseary should not be answered from a
+Huberman episode.
+
+
+3. TRANSCRIPT-FIRST RETRIEVAL
+
+Spoken transcript evidence outranks promotional description
+metadata.
+
+
+4. EXPLICIT EVIDENCE
+
+Answers identify source chunks.
+
+
+5. PER-VIDEO ANALYSIS
+
+Large channel questions are decomposed before synthesis.
+
+
+6. SMALL-MODEL-FRIENDLY DESIGN
+
+Gemma 3 4B receives small, focused evidence packets rather than
+massive mixed contexts.
+
+
+7. DETERMINISTIC STRUCTURE
+
+Python handles:
+
+filesystem paths
+metadata
+video IDs
+URLs
+chunking
+storage
+routing information
+
+
+8. AI FOR INTERPRETATION
+
+Gemma handles:
+
+summaries
+questions
+topic synthesis
+claim interpretation
+
+
+9. CLAIM ATTRIBUTION
+
+The system reports what a speaker says without automatically
+treating the statement as verified fact.
+
+
+10. LOCAL-FIRST KNOWLEDGE
+
+Transcripts and structured knowledge remain stored locally.
+
+
+============================================================
+QUICK COMMAND REFERENCE
+============================================================
+
+richmack youtube --help
+
+
+richmack youtube channels
+
+
+richmack youtube sync --limit 3
+
+
+richmack youtube sync \
+  --channel tim-ferriss \
+  --limit 3
+
+
+richmack youtube knowledge build tim-ferriss
+
+
+richmack youtube knowledge build \
+  tim-ferriss \
+  --limit 5
+
+
+richmack youtube knowledge build \
+  tim-ferriss \
+  --limit 5 \
+  --force \
+  --no-summary
+
+
+richmack youtube knowledge build --all
+
+
+richmack youtube knowledge status
+
+
+richmack youtube knowledge videos tim-ferriss
+
+
+richmack youtube knowledge topics tim-ferriss
+
+
+richmack youtube search robotics
+
+
+richmack youtube ask \
+  fireship \
+  "What programming topics were discussed?"
+
+
+richmack youtube ask \
+  fireship \
+  --latest \
+  "What did the latest video discuss?"
+
+
+richmack youtube summarize \
+  tim-ferriss \
+  --limit 3
+
+
+richmack youtube summarize \
+  --all \
+  --limit 3
+
+
+richmack youtube summarize \
+  --all \
+  --limit 3 \
+  --combined
+
+
+richmack youtube chat tim-ferriss
+
+
+richmack youtube chat danny-jones
+
+
+============================================================
+EXAMPLE TIM FERRISS SESSION
+============================================================
+
+richmack youtube chat tim-ferriss
+
+youtube> what is the 4x4 protocol?
+
+youtube> what else is mentioned?
+
+youtube> tell me more about AI predictions
+
+youtube> /sources
+
+youtube> /quit
+
+
+============================================================
+EXAMPLE DANNY JONES SESSION
+============================================================
+
+richmack youtube chat danny-jones
+
+youtube> what are the main topics across the latest videos?
+
+youtube> what is the most unusual claim discussed?
+
+youtube> what else did they say about it?
+
+youtube> tell me what they said about knights templar
+
+youtube> /sources
+
+youtube> /quit
+
+
+============================================================
+RICHMACKOS YOUTUBE V2 SUMMARY
+============================================================
+
+The current system combines:
+
+YouTube ingestion
+subtitle cleanup
+automatic filesystem watching
+automatic RAG indexing
+remote Ollama embeddings
+Gemma 3 4B
+structured per-video knowledge
+topic extraction
+channel indexes
+video routing
+transcript-first retrieval
+source citations
+follow-up video memory
+per-video channel analysis
+combined summaries
+interactive terminal chat
+
+
+The central architecture is:
+
+CAPTURE
+   ↓
+ORGANIZE
+   ↓
+INDEX
+   ↓
+RETRIEVE
+   ↓
+VERIFY SOURCE
+   ↓
+SYNTHESIZE
+   ↓
+INTERACT
+   ↓
+PERSIST
+~~
+
+<!-- RICHMACK_YOUTUBE_V2_END -->

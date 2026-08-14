@@ -4,15 +4,32 @@ set -euo pipefail
 case "${1:-}" in
     organize)
         shift
-        exec /usr/bin/python3 "$HOME/.richmackos/organize.py" "$@"
+        exec /usr/bin/python3 \
+            "$HOME/.richmackos/organize.py" \
+            "$@"
         ;;
 
     watch)
         shift
-        exec "$HOME/.richmackos/watchctl" "$@"
+        exec "$HOME/.richmackos/watchctl" \
+            "$@"
+        ;;
+
+    youtube)
+        shift
+        exec "$HOME/.richmackos/youtube_cmd" \
+            "$@"
+        ;;
+
+    rag)
+        shift
+        exec "$HOME/.richmackos/rag_cmd" \
+            "$@"
         ;;
 
     *)
-        exec /usr/bin/python3 "$HOME/.richmackos/richmackos.py" "$@"
+        exec /usr/bin/python3 \
+            "$HOME/.richmackos/richmackos.py" \
+            "$@"
         ;;
 esac
