@@ -28,6 +28,26 @@ from richmack_framework.tracker import (
 )
 
 
+from richmack_ui import (
+    BOLD,
+    CYAN,
+    GREEN,
+    MAGENTA,
+    RED,
+    RESET,
+    YELLOW,
+    color,
+    metric_bar,
+    panel,
+    print_ai,
+    print_error,
+    print_info,
+    print_metric,
+    print_success,
+    print_warning,
+)
+
+
 from richmack_framework import (
     adjusted_wpm,
     approach_score,
@@ -60,24 +80,22 @@ def heading(
     topic=None,
 ):
     print()
-    print(
-        "Richmack Framework"
-    )
-    print(
-        "=" * 60
-    )
-    print(
-        title
+
+    subtitle = (
+        f"Topic: {topic}"
+        if topic
+        else None
     )
 
-    if topic:
-        print(
-            f"Topic: {topic}"
+    print(
+        panel(
+            title,
+            subtitle=subtitle,
+            ansi=CYAN,
         )
-
-    print(
-        "-" * 60
     )
+
+    print()
 
 
 def cmd_reference(
@@ -528,8 +546,8 @@ def cmd_topic_add(
         args.name,
     )
 
-    print(
-        f"Topic ID:               {topic_id}"
+    print_success(
+        f"Topic created with ID {topic_id}"
     )
     print(
         f"Description:            {args.description}"
@@ -602,8 +620,8 @@ def cmd_log(
         args.topic_name,
     )
 
-    print(
-        f"Session ID:             {session_id}"
+    print_success(
+        f"Learning session logged: {session_id}"
     )
     print(
         f"Raw repetitions:        {args.raw_reps:.2f}"
@@ -644,12 +662,48 @@ def cmd_status(
     print(
         f"Stable repetitions:     {result['stable_reps']:.2f}"
     )
-    print(
-        f"Retention:              {result['retention'] * 100:.2f}%"
+
+    print()
+    print_metric(
+        "Retention",
+        result["retention"],
     )
-    print(
-        f"Leakage:                {result['leakage']:.2f}"
+
+    if result["latest_capability"] is not None:
+        print_metric(
+            "Capability",
+            result["latest_capability"],
+        )
+
+    print()
+
+    leakage_ratio = (
+        result["leakage"]
+        / result["raw_reps"]
+        if result["raw_reps"]
+        else 0.0
     )
+
+    leakage_bar = metric_bar(
+        leakage_ratio,
+        maximum=1.0,
+    )
+
+    leakage_color = (
+        GREEN
+        if leakage_ratio <= 0.20
+        else YELLOW
+        if leakage_ratio <= 0.40
+        else RED
+    )
+
+    print(
+        f"{'Leakage':<24} "
+        f"{color(leakage_bar, leakage_color)} "
+        f"{leakage_ratio * 100:.1f}%"
+    )
+
+    print()
     print(
         f"Learning Units:         {result['learning_units']:.2f}"
     )
@@ -660,7 +714,11 @@ def cmd_status(
         f"Connections:            {result['connections']:.2f}"
     )
     print(
-        f"Growth multiplier:      {result['growth_multiplier']:.4f}x"
+        color(
+            f"Growth multiplier:      "
+            f"{result['growth_multiplier']:.4f}x",
+            GREEN,
+        )
     )
     print(
         f"Net information mass:   {result['net_mass']:.4f}"
@@ -668,12 +726,6 @@ def cmd_status(
     print(
         f"Information density:    {result['density']:.4f}"
     )
-
-    if result["latest_capability"] is not None:
-        print(
-            f"Latest capability:      "
-            f"{result['latest_capability']:.4f}"
-        )
 
     print()
 
