@@ -2110,74 +2110,15 @@ def chat(
         # SINGLE-VIDEO CONTINUATION
         # ---------------------------------------------------------------
 
-        video, evidence = select_chat_evidence(
-            route=route,
-            question=question,
-            last_question=last_question,
-            current_video=current_video,
-            videos=videos,
-            top_k=top_k
-        )
-
-        if route == "video":
-            current_video = video
-
-        progress(
-            "Routing",
-            100
-        )
-
-        last_question = (
-            question
-        )
-
-        title = (
-            video[
-                "metadata"
-            ].get(
-                "title",
-                ""
-            )
-        )
-
-        print(
-            f"{GRAY}"
-            f"Video scope: "
-            f"{title}"
-            f"{RESET}"
-        )
-
-        # TRANSCRIPT ALWAYS GETS PRIORITY.
-        #
-        # If keyword retrieval misses because the title and spoken wording
-        # differ ("4x4" vs "four by four"), sample the actual transcript
-        # before considering DESCRIPTION metadata.
-
-        description_fallback = False
-
-        if not evidence:
-            evidence = whole_video_sample(
-                video,
-                top_k=top_k
-            )
-
-        # Description is used only if there is literally no usable
-        # transcript evidence.
-        if not evidence:
-            description_fallback = True
-
         try:
-            (
-                answer,
-                evidence_display
-            ) = generate(
-                model,
-                question,
-                video,
-                evidence,
-                description_fallback=(
-                    description_fallback
-                )
+            result = run_video_question(
+                route=route,
+                model=model,
+                question=question,
+                last_question=last_question,
+                current_video=current_video,
+                videos=videos,
+                top_k=top_k
             )
 
         except Exception as exc:
@@ -2188,18 +2129,15 @@ def chat(
             )
             continue
 
+        current_video = (
+            result["current_video"]
+        )
+
         last_evidence = (
-            evidence_display
+            result["evidence"]
         )
 
-        print_answer_panel(
-            answer
-        )
-
-        print_single_video_evidence(
-            evidence_display,
-            title
-        )
+        last_question = question
 
 
 ###############################################################################
