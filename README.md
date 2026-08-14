@@ -2960,3 +2960,40 @@ PERSIST
 ~~
 
 <!-- RICHMACK_YOUTUBE_V2_END -->
+
+## Engineering Metrics
+
+RichmackOS includes a native engineering-quality measurement subsystem.
+
+Show the current repository engineering report:
+
+```bash
+richmack metrics
+```
+
+Show the highest-complexity Python functions:
+
+```bash
+richmack metrics hotspots
+```
+
+Generate machine-readable metrics:
+
+```bash
+richmack metrics --json
+```
+
+Run the complete development quality gate:
+
+```bash
+make quality
+```
+
+The metrics system tracks source size, testing, Git activity, automation, complexity, technical debt, maintainability, and overall engineering efficiency.
+
+Two aggregate RichmackOS scores are provided:
+
+- **Engineering Index** — weighted repository engineering-health score.
+- **Richmack Weissman** — custom RichmackOS engineering-efficiency score inspired in name by the fictional Weissman Score from the HBO series *Silicon Valley*, but measuring software-engineering efficiency rather than data compression.
+
+The v0.7 engineering work also introduced regression testing and significant complexity reduction across the RichmackOS CLI and YouTube Knowledge Engine.

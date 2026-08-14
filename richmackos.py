@@ -855,6 +855,184 @@ def help_screen():
 """)
 
 
+
+def _cmd_scan(args):
+    scan(
+        args[0] if args else HOME
+    )
+
+
+def _cmd_search(args):
+    search(
+        " ".join(args)
+    )
+
+
+def _cmd_remember(args):
+    remember(
+        " ".join(args)
+    )
+
+
+def _cmd_memories(args):
+    memories()
+
+
+def _cmd_recall(args):
+    memories(
+        " ".join(args)
+    )
+
+
+def _cmd_forget(args):
+    if not args:
+        print(
+            color(
+                "forget requires a memory ID",
+                RED
+            )
+        )
+        return
+
+    try:
+        memory_id = int(
+            args[0]
+        )
+    except ValueError:
+        print(
+            color(
+                f"Invalid memory ID: {args[0]}",
+                RED
+            )
+        )
+        return
+
+    forget(
+        memory_id
+    )
+
+
+def _cmd_readme(args):
+    readme_for_project(
+        args[0] if args else "."
+    )
+
+
+def _cmd_ai(args):
+    subprocess.run(
+        ["richmackai"] + args,
+        check=False
+    )
+
+
+def _cmd_chat(args):
+    subprocess.run(
+        ["richmackai", "--chat"],
+        check=False
+    )
+
+
+def _cmd_rag(args):
+    subprocess.run(
+        ["richmackrag", "ask"] + args,
+        check=False
+    )
+
+
+def _cmd_help(args):
+    help_screen()
+
+
+def _cmd_skill(args):
+    if not args:
+        skill_list()
+        return
+
+    action = args[0]
+
+    if action == "list":
+        skill_list()
+        return
+
+    if action == "add":
+        if len(args) < 3:
+            print(
+                color(
+                    "Usage: richmack skill add NAME COMMAND",
+                    RED
+                )
+            )
+            return
+
+        skill_add(
+            args[1],
+            " ".join(args[2:])
+        )
+        return
+
+    if action == "show":
+        if len(args) < 2:
+            print(
+                color(
+                    "Usage: richmack skill show NAME",
+                    RED
+                )
+            )
+            return
+
+        skill_show(
+            args[1]
+        )
+        return
+
+    if action == "run":
+        if len(args) < 2:
+            print(
+                color(
+                    "Usage: richmack skill run NAME",
+                    RED
+                )
+            )
+            return
+
+        skill_run(
+            args[1]
+        )
+        return
+
+    print(
+        color(
+            f"Unknown skill action: {action}",
+            RED
+        )
+    )
+
+
+COMMANDS = {
+    "status": lambda args: system_status(),
+    "doctor": lambda args: doctor(),
+    "scan": _cmd_scan,
+    "search": _cmd_search,
+    "repos": lambda args: repos(),
+    "large": lambda args: large_files(),
+    "duplicates": lambda args: duplicate_candidates(),
+    "remember": _cmd_remember,
+    "memories": _cmd_memories,
+    "memory": _cmd_memories,
+    "recall": _cmd_recall,
+    "forget": _cmd_forget,
+    "skill": _cmd_skill,
+    "plugins": lambda args: plugin_list(),
+    "readme": _cmd_readme,
+    "ai": _cmd_ai,
+    "chat": _cmd_chat,
+    "rag": _cmd_rag,
+    "help": _cmd_help,
+    "-h": _cmd_help,
+    "--help": _cmd_help,
+}
+
+
 def main():
     BASE.mkdir(
         parents=True,
@@ -878,102 +1056,11 @@ def main():
     cmd = sys.argv[1]
     args = sys.argv[2:]
 
-    if cmd == "status":
-        system_status()
+    handler = COMMANDS.get(
+        cmd
+    )
 
-    elif cmd == "doctor":
-        doctor()
-
-    elif cmd == "scan":
-        scan(
-            args[0] if args else HOME
-        )
-
-    elif cmd == "search":
-        search(
-            " ".join(args)
-        )
-
-    elif cmd == "repos":
-        repos()
-
-    elif cmd == "large":
-        large_files()
-
-    elif cmd == "duplicates":
-        duplicate_candidates()
-
-    elif cmd == "remember":
-        remember(
-            " ".join(args)
-        )
-
-    elif cmd in {"memories", "memory"}:
-        memories()
-
-    elif cmd == "recall":
-        memories(
-            " ".join(args)
-        )
-
-    elif cmd == "forget":
-        forget(
-            int(args[0])
-        )
-
-    elif cmd == "skill":
-        if not args:
-            skill_list()
-            return
-
-        action = args[0]
-
-        if action == "list":
-            skill_list()
-
-        elif action == "add":
-            skill_add(
-                args[1],
-                " ".join(args[2:])
-            )
-
-        elif action == "show":
-            skill_show(
-                args[1]
-            )
-
-        elif action == "run":
-            skill_run(
-                args[1]
-            )
-
-    elif cmd == "plugins":
-        plugin_list()
-
-    elif cmd == "readme":
-        readme_for_project(
-            args[0] if args else "."
-        )
-
-    elif cmd == "ai":
-        subprocess.run(
-            ["richmackai"] + args
-        )
-
-    elif cmd == "chat":
-        subprocess.run(
-            ["richmackai", "--chat"]
-        )
-
-    elif cmd == "rag":
-        subprocess.run(
-            ["richmackrag", "ask"] + args
-        )
-
-    elif cmd in {"help", "-h", "--help"}:
-        help_screen()
-
-    else:
+    if handler is None:
         print(
             color(
                 f"Unknown command: {cmd}",
@@ -982,6 +1069,11 @@ def main():
         )
 
         help_screen()
+        return
+
+    handler(
+        args
+    )
 
 
 if __name__ == "__main__":

@@ -371,13 +371,104 @@ def normalized_topic_words(value):
     )
 
 
+TOPIC_ARTIFACT_PREFIXES = (
+    "mhm.",
+    "yeah.",
+    "uh.",
+    "um.",
+    "[laughter]",
+    "[music]",
+    "[applause]",
+)
+
+
+def _topic_word_key(word):
+    return word.replace(
+        "'",
+        ""
+    )
+
+
+def _topic_word_is_filler(
+    word
+):
+    key = _topic_word_key(
+        word
+    )
+
+    return (
+        key in TOPIC_FILLER
+        or key in STOPWORDS
+    )
+
+
+def _topic_has_only_filler(
+    words
+):
+    return all(
+        _topic_word_is_filler(
+            word
+        )
+        for word in words
+    )
+
+
+def _topic_is_short_filler_fragment(
+    words
+):
+    if not words:
+        return True
+
+    first = _topic_word_key(
+        words[0]
+    )
+
+    return (
+        first in TOPIC_FILLER
+        and len(words) <= 3
+    )
+
+
+def _topic_has_meaningful_word(
+    words
+):
+    return any(
+        (
+            _topic_word_key(word)
+            not in TOPIC_FILLER
+            and _topic_word_key(word)
+            not in STOPWORDS
+            and len(
+                _topic_word_key(word)
+            ) >= 3
+        )
+        for word in words
+    )
+
+
+def _topic_starts_with_artifact(
+    value
+):
+    low = value.lower()
+
+    return any(
+        low.startswith(
+            artifact
+        )
+        for artifact
+        in TOPIC_ARTIFACT_PREFIXES
+    )
+
+
 def is_good_topic(value):
     """
     Reject conversational fragments while preserving meaningful
     entities and technical concepts.
     """
 
-    value = clean_topic(value)
+    value = clean_topic(
+        value
+    )
 
     if not value:
         return False
@@ -389,62 +480,23 @@ def is_good_topic(value):
     if not words:
         return False
 
-    # Reject phrases composed entirely of conversational filler.
-    if all(
-        (
-            word.replace("'", "")
-            in TOPIC_FILLER
-            or word.replace("'", "")
-            in STOPWORDS
-        )
-        for word in words
+    if _topic_has_only_filler(
+        words
     ):
         return False
 
-    # Reject short filler-led fragments:
-    # "Yeah. And", "Mhm. But", "Wow", etc.
-    first = words[0].replace("'", "")
-
-    if (
-        first in TOPIC_FILLER
-        and len(words) <= 3
+    if _topic_is_short_filler_fragment(
+        words
     ):
         return False
 
-    # At least one meaningful token is required.
-    meaningful = [
-        word
-        for word in words
-        if (
-            word.replace("'", "")
-            not in TOPIC_FILLER
-            and word.replace("'", "")
-            not in STOPWORDS
-            and len(
-                word.replace("'", "")
-            ) >= 3
-        )
-    ]
-
-    if not meaningful:
+    if not _topic_has_meaningful_word(
+        words
+    ):
         return False
 
-    # Reject obvious transcript artifacts.
-    low = value.lower()
-
-    artifacts = (
-        "mhm.",
-        "yeah.",
-        "uh.",
-        "um.",
-        "[laughter]",
-        "[music]",
-        "[applause]",
-    )
-
-    if any(
-        low.startswith(item)
-        for item in artifacts
+    if _topic_starts_with_artifact(
+        value
     ):
         return False
 
@@ -574,40 +626,23 @@ def extract_ngram_phrases(text):
     return phrases
 
 
-def extract_keywords(
-    title,
-    transcript,
-    limit=40
-):
-    """
-    Richmack topic extraction.
-
-    This is deliberately NOT raw word frequency.
-
-    Ranking favors:
-      - title concepts
-      - named entities
-      - repeated multi-word phrases
-      - distinctive technical concepts
-    """
-
-    scores = Counter()
-
-    title_lower = title.lower()
-
-    # ------------------------------------------------------------------
-    # Title phrases get strong weight.
-    # ------------------------------------------------------------------
-
-    title_words = [
+def _keyword_title_words(title):
+    return [
         word
         for word in topic_tokens(title)
-        if (
-            len(
-                word.replace("'", "")
-            ) >= 3
-        )
+        if len(
+            word.replace("'", "")
+        ) >= 3
     ]
+
+
+def _score_title_keywords(
+    scores,
+    title
+):
+    title_words = _keyword_title_words(
+        title
+    )
 
     for size in (4, 3, 2):
         for i in range(
@@ -621,23 +656,17 @@ def extract_keywords(
                 )
             )
 
-            low_words = [
-                w.lower().replace("'", "")
-                for w in phrase.split()
+            words = [
+                word.lower().replace("'", "")
+                for word in phrase.split()
             ]
 
-            useful = [
-                w
-                for w in low_words
-                if w not in STOPWORDS
-            ]
+            if any(
+                word not in STOPWORDS
+                for word in words
+            ):
+                scores[phrase] += 8
 
-            if len(useful) >= 1:
-                scores[
-                    phrase
-                ] += 8
-
-    # Individual distinctive title terms.
     for word in title_words:
         low = (
             word.lower()
@@ -648,59 +677,52 @@ def extract_keywords(
             low not in STOPWORDS
             and len(low) >= 4
         ):
-            scores[
-                word
-            ] += 6
+            scores[word] += 6
 
-    # ------------------------------------------------------------------
-    # Named entities.
-    # ------------------------------------------------------------------
+
+def _score_named_keywords(
+    scores,
+    title,
+    transcript
+):
+    ignored = {
+        "the",
+        "this",
+        "that",
+        "and",
+    }
 
     for phrase in extract_named_phrases(
         title + "\n" + transcript
     ):
-        low = phrase.lower()
-
-        if low in {
-            "the",
-            "this",
-            "that",
-            "and",
-        }:
+        if phrase.lower() in ignored:
             continue
 
-        scores[
-            phrase
-        ] += 5
+        scores[phrase] += 5
 
-    # ------------------------------------------------------------------
-    # Multiword transcript phrases.
-    # ------------------------------------------------------------------
 
+def _score_ngram_keywords(
+    scores,
+    transcript
+):
     phrase_counts = Counter(
         extract_ngram_phrases(
             transcript
         )
     )
 
-    for phrase, count in (
-        phrase_counts.items()
-    ):
-        # Stronger weighting for repetition.
-        score = min(
+    for phrase, count in phrase_counts.items():
+        scores[phrase] += min(
             10,
             2 + count
         )
 
-        scores[
-            phrase
-        ] += score
 
-    # ------------------------------------------------------------------
-    # Important domain terms, even if single-word.
-    # ------------------------------------------------------------------
-
-    important_single = Counter()
+def _score_single_keywords(
+    scores,
+    transcript
+):
+    counts = Counter()
 
     for word in topic_tokens(
         transcript
@@ -716,73 +738,87 @@ def extract_keywords(
         ):
             continue
 
-        important_single[
-            word
-        ] += 1
+        counts[word] += 1
 
-    for word, count in (
-        important_single.items()
-    ):
-        # Single words need stronger evidence than phrases.
+    for word, count in counts.items():
         if count >= 2:
-            scores[
-                word
-            ] += min(
+            scores[word] += min(
                 5,
                 count
             )
 
-    # ------------------------------------------------------------------
-    # De-duplicate case-insensitively.
-    # ------------------------------------------------------------------
 
-    ranked = sorted(
+def _rank_keyword_scores(scores):
+    return sorted(
         scores.items(),
         key=lambda item: (
             item[1],
             len(item[0].split()),
-            len(item[0])
+            len(item[0]),
         ),
-        reverse=True
+        reverse=True,
     )
 
+
+def _all_stopwords(phrase):
+    words = [
+        word.lower().replace("'", "")
+        for word in phrase.split()
+    ]
+
+    return (
+        bool(words)
+        and all(
+            word in STOPWORDS
+            for word in words
+        )
+    )
+
+
+def _valid_keyword_phrase(
+    phrase,
+    seen
+):
+    if not phrase:
+        return False
+
+    if not is_good_topic(
+        phrase
+    ):
+        return False
+
+    if phrase.lower() in seen:
+        return False
+
+    if _all_stopwords(
+        phrase
+    ):
+        return False
+
+    return True
+
+
+def _select_ranked_keywords(
+    ranked,
+    limit
+):
     output = []
     seen = set()
 
-    for phrase, score in ranked:
+    for phrase, _score in ranked:
         phrase = clean_topic(
             phrase
         )
 
-        key = phrase.lower()
-
-        if not phrase:
-            continue
-
-        if not is_good_topic(
-            phrase
+        if not _valid_keyword_phrase(
+            phrase,
+            seen
         ):
             continue
 
-        if key in seen:
-            continue
-
-        # Reject phrases made entirely of stopwords.
-        words = [
-            w.lower().replace("'", "")
-            for w in phrase.split()
-        ]
-
-        if (
-            words
-            and all(
-                word in STOPWORDS
-                for word in words
-            )
-        ):
-            continue
-
-        seen.add(key)
+        seen.add(
+            phrase.lower()
+        )
 
         output.append(
             phrase
@@ -792,6 +828,58 @@ def extract_keywords(
             break
 
     return output
+
+
+def extract_keywords(
+    title,
+    transcript,
+    limit=40
+):
+    """
+    Richmack topic extraction.
+
+    Ranking favors:
+      - title concepts
+      - named entities
+      - repeated multi-word phrases
+      - distinctive technical concepts
+
+    Candidate generation, scoring, ranking and final selection
+    are kept as separate stages so each stage can be tested
+    independently.
+    """
+
+    scores = Counter()
+
+    _score_title_keywords(
+        scores,
+        title
+    )
+
+    _score_named_keywords(
+        scores,
+        title,
+        transcript
+    )
+
+    _score_ngram_keywords(
+        scores,
+        transcript
+    )
+
+    _score_single_keywords(
+        scores,
+        transcript
+    )
+
+    ranked = _rank_keyword_scores(
+        scores
+    )
+
+    return _select_ranked_keywords(
+        ranked,
+        limit
+    )
 
 
 ###############################################################################
@@ -1130,6 +1218,260 @@ def build_video(
 # CHANNEL INDEX
 ###############################################################################
 
+def _load_json_file(
+    path,
+    default
+):
+    if not path.exists():
+        return default
+
+    try:
+        return json.loads(
+            path.read_text(
+                encoding="utf-8"
+            )
+        )
+    except Exception:
+        return default
+
+
+def _load_summary_preview(
+    video_dir,
+    limit=3000
+):
+    path = (
+        video_dir
+        / "summary.md"
+    )
+
+    if not path.exists():
+        return ""
+
+    return (
+        path.read_text(
+            encoding="utf-8",
+            errors="ignore"
+        )
+        [:limit]
+    )
+
+
+def _load_video_index_entry(
+    video_dir
+):
+    metadata_path = (
+        video_dir
+        / "metadata.json"
+    )
+
+    if not metadata_path.exists():
+        return None
+
+    meta = _load_json_file(
+        metadata_path,
+        None
+    )
+
+    if not isinstance(
+        meta,
+        dict
+    ):
+        return None
+
+    keywords = _load_json_file(
+        video_dir
+        / "keywords.json",
+        []
+    )
+
+    if not isinstance(
+        keywords,
+        list
+    ):
+        keywords = []
+
+    return {
+        "video_id":
+            meta.get(
+                "video_id"
+            ),
+
+        "title":
+            meta.get(
+                "title"
+            ),
+
+        "upload_date":
+            meta.get(
+                "upload_date"
+            ),
+
+        "url":
+            meta.get(
+                "url"
+            ),
+
+        "keywords":
+            keywords,
+
+        "summary_preview":
+            _load_summary_preview(
+                video_dir
+            ),
+    }
+
+
+def _collect_channel_entries(
+    videos_root
+):
+    entries = []
+
+    if not videos_root.exists():
+        return entries
+
+    for video_dir in (
+        videos_root.iterdir()
+    ):
+        if not video_dir.is_dir():
+            continue
+
+        entry = _load_video_index_entry(
+            video_dir
+        )
+
+        if entry is None:
+            continue
+
+        entries.append(
+            entry
+        )
+
+    entries.sort(
+        key=lambda item:
+            item.get(
+                "upload_date",
+                ""
+            ),
+        reverse=True
+    )
+
+    return entries
+
+
+def _score_channel_topics(
+    entries
+):
+    topic_scores = Counter()
+    topic_videos = {}
+
+    for item in entries:
+        video_id = item.get(
+            "video_id",
+            ""
+        )
+
+        for position, topic in enumerate(
+            item.get(
+                "keywords",
+                []
+            )
+        ):
+            if not topic:
+                continue
+
+            key = topic.lower()
+
+            weight = max(
+                1,
+                40 - position
+            )
+
+            if len(
+                topic.split()
+            ) >= 2:
+                weight += 15
+
+            topic_scores[
+                topic
+            ] += weight
+
+            topic_videos.setdefault(
+                key,
+                set()
+            ).add(
+                video_id
+            )
+
+    return (
+        topic_scores,
+        topic_videos,
+    )
+
+
+def _rank_channel_topics(
+    topic_scores
+):
+    return sorted(
+        topic_scores.items(),
+        key=lambda item: (
+            item[1],
+            len(item[0].split()),
+            len(item[0])
+        ),
+        reverse=True
+    )
+
+
+def _build_channel_topics(
+    entries,
+    limit=100
+):
+    (
+        topic_scores,
+        topic_videos,
+    ) = _score_channel_topics(
+        entries
+    )
+
+    ranked_topics = _rank_channel_topics(
+        topic_scores
+    )
+
+    topics = []
+    seen = set()
+
+    for topic, score in ranked_topics:
+        key = topic.lower()
+
+        if key in seen:
+            continue
+
+        seen.add(
+            key
+        )
+
+        topics.append({
+            "topic":
+                topic,
+
+            "video_count":
+                len(
+                    topic_videos.get(
+                        key,
+                        set()
+                    )
+                ),
+
+            "score":
+                score,
+        })
+
+        if len(topics) >= limit:
+            break
+
+    return topics
+
+
 def build_channel_index(
     channel_key,
     channel_name
@@ -1144,103 +1486,8 @@ def build_channel_index(
         / "videos"
     )
 
-    entries = []
-
-    if videos_root.exists():
-        for video_dir in (
-            videos_root.iterdir()
-        ):
-            if not video_dir.is_dir():
-                continue
-
-            metadata_path = (
-                video_dir
-                / "metadata.json"
-            )
-
-            if not metadata_path.exists():
-                continue
-
-            try:
-                meta = json.loads(
-                    metadata_path.read_text(
-                        encoding="utf-8"
-                    )
-                )
-
-            except Exception:
-                continue
-
-            keywords = []
-
-            keyword_path = (
-                video_dir
-                / "keywords.json"
-            )
-
-            if keyword_path.exists():
-                try:
-                    keywords = json.loads(
-                        keyword_path.read_text(
-                            encoding="utf-8"
-                        )
-                    )
-
-                except Exception:
-                    pass
-
-            summary = ""
-
-            summary_path = (
-                video_dir
-                / "summary.md"
-            )
-
-            if summary_path.exists():
-                summary = (
-                    summary_path
-                    .read_text(
-                        encoding="utf-8",
-                        errors="ignore"
-                    )
-                    [:3000]
-                )
-
-            entries.append({
-                "video_id":
-                    meta.get(
-                        "video_id"
-                    ),
-
-                "title":
-                    meta.get(
-                        "title"
-                    ),
-
-                "upload_date":
-                    meta.get(
-                        "upload_date"
-                    ),
-
-                "url":
-                    meta.get(
-                        "url"
-                    ),
-
-                "keywords":
-                    keywords,
-
-                "summary_preview":
-                    summary,
-            })
-
-    entries.sort(
-        key=lambda item:
-            item.get(
-                "upload_date",
-                ""
-            ),
-        reverse=True
+    entries = _collect_channel_entries(
+        videos_root
     )
 
     index = {
@@ -1265,92 +1512,12 @@ def build_channel_index(
         index
     )
 
-    topic_scores = Counter()
-    topic_videos = {}
-
-    for item in entries:
-        video_id = item.get(
-            "video_id",
-            ""
-        )
-
-        for position, topic in enumerate(
-            item.get(
-                "keywords",
-                []
-            )
-        ):
-            if not topic:
-                continue
-
-            key = topic.lower()
-
-            # Higher-ranked topics inside each video are worth more.
-            weight = max(
-                1,
-                40 - position
-            )
-
-            # Multi-word topics get a bonus because they are usually
-            # more informative than generic single terms.
-            words = topic.split()
-
-            if len(words) >= 2:
-                weight += 15
-
-            topic_scores[
-                topic
-            ] += weight
-
-            topic_videos.setdefault(
-                key,
-                set()
-            ).add(
-                video_id
-            )
-
-    ranked_topics = sorted(
-        topic_scores.items(),
-        key=lambda item: (
-            item[1],
-            len(item[0].split()),
-            len(item[0])
-        ),
-        reverse=True
-    )
-
-    topics = []
-
-    seen = set()
-
-    for topic, score in ranked_topics:
-        key = topic.lower()
-
-        if key in seen:
-            continue
-
-        seen.add(
-            key
-        )
-
-        topics.append({
-            "topic": topic,
-            "video_count": len(
-                topic_videos.get(
-                    key,
-                    set()
-                )
-            ),
-            "score": score,
-        })
-
-        if len(topics) >= 100:
-            break
-
     write_json(
         channel_root
         / "topics.json",
-        topics
+        _build_channel_topics(
+            entries
+        )
     )
 
 

@@ -1,0 +1,303 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+if str(ROOT) not in sys.path:
+    sys.path.insert(
+        0,
+        str(ROOT),
+    )
+
+from richmack_metrics.collector import collect_metrics
+
+
+def bar(score: float) -> str:
+    width = 20
+
+    value = max(
+        0.0,
+        min(10.0, score),
+    )
+
+    filled = round(
+        value / 10 * width
+    )
+
+    return (
+        "["
+        + "#" * filled
+        + "-" * (width - filled)
+        + "]"
+    )
+
+
+def score(
+    label: str,
+    value: float,
+) -> None:
+
+    print(
+        f"{label:<22} "
+        f"{bar(value)} "
+        f"{value:>4.1f}/10"
+    )
+
+
+def show_hotspots(result: dict) -> None:
+    print()
+    print(
+        "RichmackOS Complexity Hotspots"
+    )
+    print("=" * 78)
+
+    hotspots = (
+        result["complexity"]
+        .get("hotspots", [])
+    )
+
+    if not hotspots:
+        print(
+            "No Python functions found."
+        )
+        return
+
+    print(
+        f"{'CX':>4} "
+        f"{'LOC':>5} "
+        f"{'LINE':>6} "
+        f"{'FUNCTION':<26} "
+        f"FILE"
+    )
+
+    print("-" * 78)
+
+    for item in hotspots:
+        path = Path(
+            item["file"]
+        )
+
+        try:
+            display_path = path.relative_to(
+                ROOT
+            )
+        except ValueError:
+            display_path = path
+
+        print(
+            f"{item['complexity']:>4} "
+            f"{item['lines']:>5} "
+            f"{item['line']:>6} "
+            f"{item['name'][:26]:<26} "
+            f"{display_path}"
+        )
+
+
+def show_summary(result: dict) -> None:
+
+    scores = result["scores"]
+    complexity = result["complexity"]
+
+    print()
+    print(
+        "RichmackOS Engineering Metrics"
+    )
+    print("=" * 62)
+
+    print(
+        f"Source files:        "
+        f"{result['source']['files']}"
+    )
+
+    print(
+        f"Source lines:        "
+        f"{result['source']['lines']}"
+    )
+
+    print(
+        f"Test files:          "
+        f"{result['tests']['files']}"
+    )
+
+    print(
+        f"Test lines:          "
+        f"{result['tests']['lines']}"
+    )
+
+    print(
+        f"Test/source ratio:   "
+        f"{result['tests']['source_ratio'] * 100:.2f}%"
+    )
+
+    print(
+        f"Git commits:         "
+        f"{result['git']['commits']}"
+    )
+
+    print(
+        f"Contributors:        "
+        f"{result['git']['contributors']}"
+    )
+
+    print(
+        f"Release tags:        "
+        f"{result['git']['tags']}"
+    )
+
+    print()
+    print(
+        "Python complexity"
+    )
+    print("-" * 62)
+
+    print(
+        f"Functions:           "
+        f"{complexity['functions']}"
+    )
+
+    print(
+        f"Average complexity:  "
+        f"{complexity['average_complexity']}"
+    )
+
+    print(
+        f"Maximum complexity:  "
+        f"{complexity['maximum_complexity']}"
+    )
+
+    print(
+        f"Long functions:      "
+        f"{complexity['long_functions']}"
+    )
+
+    print(
+        f"Syntax errors:       "
+        f"{complexity['syntax_errors']}"
+    )
+
+    print()
+    print(
+        "Engineering Scores"
+    )
+    print("-" * 62)
+
+    score(
+        "Throughput",
+        scores["throughput"],
+    )
+
+    score(
+        "Automation",
+        scores["automation"],
+    )
+
+    score(
+        "Testing",
+        scores["testing"],
+    )
+
+    score(
+        "Complexity",
+        scores["complexity"],
+    )
+
+    score(
+        "Technical debt",
+        scores["technical_debt"],
+    )
+
+    score(
+        "Maintainability",
+        scores["maintainability"],
+    )
+
+    print()
+
+    score(
+        "ENGINEERING INDEX",
+        scores["engineering_index"],
+    )
+
+    score(
+        "RICHMACK WEISSMAN",
+        scores["weissman"],
+    )
+
+    print()
+    print(
+        "Richmack Weissman is a custom "
+        "RichmackOS engineering-efficiency metric."
+    )
+
+
+def main() -> int:
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "RichmackOS Engineering Metrics"
+        )
+    )
+
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=(
+            "summary",
+            "hotspots",
+        ),
+        default="summary",
+    )
+
+    parser.add_argument(
+        "--hours",
+        type=float,
+        default=13.0,
+        help=(
+            "Active development hours "
+            "(default: 13)"
+        ),
+    )
+
+    parser.add_argument(
+        "--json",
+        action="store_true",
+    )
+
+    arguments = parser.parse_args()
+
+    if arguments.hours <= 0:
+        parser.error(
+            "--hours must be greater than zero"
+        )
+
+    result = collect_metrics(
+        ROOT,
+        active_hours=arguments.hours,
+    )
+
+    if arguments.json:
+        print(
+            json.dumps(
+                result,
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if arguments.command == "hotspots":
+        show_hotspots(result)
+    else:
+        show_summary(result)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

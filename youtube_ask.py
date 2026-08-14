@@ -173,6 +173,83 @@ def parse_upload_date(path):
         return datetime.date.min
 
 
+def _filter_files_by_video(
+    files,
+    video
+):
+    if not video:
+        return files
+
+    return [
+        path
+        for path in files
+        if (
+            path.stem == video
+            or transcript_metadata(
+                path
+            ).get(
+                "VIDEO_ID"
+            ) == video
+        )
+    ]
+
+
+def _filter_files_since(
+    files,
+    since
+):
+    if not since:
+        return files
+
+    since_date = (
+        datetime.datetime.strptime(
+            since,
+            "%Y-%m-%d",
+        ).date()
+    )
+
+    return [
+        path
+        for path in files
+        if parse_upload_date(
+            path
+        ) >= since_date
+    ]
+
+
+def _filter_files_by_days(
+    files,
+    days
+):
+    if days is None:
+        return files
+
+    cutoff = (
+        datetime.date.today()
+        - datetime.timedelta(
+            days=days
+        )
+    )
+
+    return [
+        path
+        for path in files
+        if parse_upload_date(
+            path
+        ) >= cutoff
+    ]
+
+
+def _sort_candidate_files(
+    files
+):
+    return sorted(
+        files,
+        key=parse_upload_date,
+        reverse=True,
+    )
+
+
 def candidate_files(
     channel_dir,
     latest=False,
@@ -181,51 +258,37 @@ def candidate_files(
     video=None,
 ):
     files = list(
-        channel_dir.glob("*.txt")
+        channel_dir.glob(
+            "*.txt"
+        )
     )
 
     if not files:
         return []
 
-    if video:
-        files = [
-            path
-            for path in files
-            if path.stem == video
-            or transcript_metadata(path).get("VIDEO_ID") == video
-        ]
+    files = _filter_files_by_video(
+        files,
+        video
+    )
 
-    if since:
-        since_date = datetime.datetime.strptime(
-            since,
-            "%Y-%m-%d",
-        ).date()
+    files = _filter_files_since(
+        files,
+        since
+    )
 
-        files = [
-            path
-            for path in files
-            if parse_upload_date(path) >= since_date
-        ]
+    files = _filter_files_by_days(
+        files,
+        days
+    )
 
-    if days is not None:
-        cutoff = (
-            datetime.date.today()
-            - datetime.timedelta(days=days)
-        )
-
-        files = [
-            path
-            for path in files
-            if parse_upload_date(path) >= cutoff
-        ]
-
-    files.sort(
-        key=parse_upload_date,
-        reverse=True,
+    files = _sort_candidate_files(
+        files
     )
 
     if latest and files:
-        return [files[0]]
+        return [
+            files[0]
+        ]
 
     return files
 
