@@ -1492,6 +1492,332 @@ Answer the question from this evidence only.
 # CHAT
 ###############################################################################
 
+
+def classify_chat_route(
+    question,
+    current_video
+):
+    channel_wide = (
+        is_channel_wide_question(
+            question
+        )
+    )
+
+    context_followup = (
+        current_video is not None
+        and is_context_followup(
+            question
+        )
+    )
+
+    overview = (
+        current_video is not None
+        and is_overview_followup(
+            question
+        )
+    )
+
+    if (
+        channel_wide
+        and not context_followup
+    ):
+        return "channel"
+
+    if context_followup:
+        return "context"
+
+    if overview:
+        return "overview"
+
+    return "video"
+
+
+def build_context_retrieval_question(
+    question,
+    last_question
+):
+    if not last_question:
+        return question
+
+    return (
+        last_question
+        + " "
+        + question
+    )
+
+
+def select_chat_evidence(
+    *,
+    route,
+    question,
+    last_question,
+    current_video,
+    videos,
+    top_k
+):
+    if route == "context":
+        video = current_video
+
+        retrieval_question = (
+            build_context_retrieval_question(
+                question,
+                last_question
+            )
+        )
+
+        evidence = retrieve_transcript(
+            retrieval_question,
+            video,
+            top_k=top_k
+        )
+
+        if not evidence:
+            evidence = whole_video_sample(
+                video,
+                top_k=top_k
+            )
+
+        return video, evidence
+
+    if route == "overview":
+        video = current_video
+
+        evidence = whole_video_sample(
+            video,
+            top_k=top_k
+        )
+
+        return video, evidence
+
+    video = select_video(
+        question,
+        videos
+    )
+
+    evidence = retrieve_transcript(
+        question,
+        video,
+        top_k=top_k
+    )
+
+    return video, evidence
+
+
+
+CHAT_QUIT_COMMANDS = {
+    "/quit",
+    "/exit",
+    "quit",
+    "exit",
+}
+
+
+def chat_command_type(question):
+    if question in CHAT_QUIT_COMMANDS:
+        return "quit"
+
+    if question == "/help":
+        return "help"
+
+    if question == "/clear":
+        return "clear"
+
+    if question == "/video":
+        return "video"
+
+    if question == "/sources":
+        return "sources"
+
+    return None
+
+
+def current_video_title(video):
+    if not video:
+        return ""
+
+    return (
+        video["metadata"]
+        .get(
+            "title",
+            ""
+        )
+    )
+
+
+def format_source_line(
+    item,
+    title=""
+):
+    if item["type"] == "TRANSCRIPT":
+        return (
+            f"  [{item['number']}] "
+            f"{title} — "
+            f"TRANSCRIPT chunk "
+            f"{item['chunk']}"
+        )
+
+    return (
+        f"  [{item['number']}] "
+        f"{title} — DESCRIPTION"
+    )
+
+
+def print_chat_help():
+    print()
+    print(
+        f"{BOLD}{CYAN}"
+        "Richmack YouTube Knowledge Chat"
+        f"{RESET}"
+    )
+    print()
+    print(
+        "Questions can be specific to one video or channel-wide."
+    )
+    print()
+    print(
+        f"{BOLD}Example specific questions:{RESET}"
+    )
+    print("  what is the 4x4 protocol?")
+    print("  what did Madonna say about AI?")
+    print("  tell me what they said about knights templar")
+    print()
+    print(
+        f"{BOLD}Example channel-wide questions:{RESET}"
+    )
+    print(
+        "  what are the main topics across the latest videos?"
+    )
+    print(
+        "  what is the most unusual claim discussed?"
+    )
+    print()
+    print(
+        f"{BOLD}Example follow-ups:{RESET}"
+    )
+    print("  what else is mentioned?")
+    print("  what else did they say about it?")
+    print("  go deeper")
+    print()
+    print(
+        f"{BOLD}Commands:{RESET}"
+    )
+    print("  /help      Show this help")
+    print("  /video     Show selected video")
+    print("  /sources   Show previous evidence")
+    print("  /clear     Clear video/follow-up context")
+    print("  /quit      Exit chat")
+    print()
+    print(
+        f"{GRAY}"
+        "Retrieval: channel isolation → video routing → "
+        "transcript evidence → Gemma"
+        f"{RESET}"
+    )
+    print()
+
+
+def print_current_video(video):
+    print()
+
+    title = current_video_title(
+        video
+    )
+
+    if title:
+        print(
+            "Current video: "
+            + title
+        )
+    else:
+        print(
+            "No video selected."
+        )
+
+    print()
+
+
+def print_previous_sources(
+    evidence
+):
+    print()
+
+    for item in evidence:
+        if item["type"] == "TRANSCRIPT":
+            print(
+                f"[{item['number']}] "
+                f"TRANSCRIPT "
+                f"chunk {item['chunk']}"
+            )
+        else:
+            print(
+                f"[{item['number']}] "
+                f"DESCRIPTION"
+            )
+
+    print()
+
+
+def print_answer_panel(answer):
+    print()
+    print(
+        f"{BOLD}{CYAN}"
+        "╭─ RICHMACK AI ─────────────────────────────"
+        f"{RESET}"
+    )
+    print(
+        f"{CYAN}"
+        f"{answer}"
+        f"{RESET}"
+    )
+    print(
+        f"{BOLD}{CYAN}"
+        "╰────────────────────────────────────────────"
+        f"{RESET}"
+    )
+
+
+def print_single_video_evidence(
+    evidence_display,
+    title
+):
+    print()
+    print(
+        f"{GRAY}"
+        f"Evidence:"
+        f"{RESET}"
+    )
+
+    for item in evidence_display:
+        print(
+            format_source_line(
+                item,
+                title=title
+            )
+        )
+
+    print()
+
+
+def print_channel_evidence(
+    evidence_display
+):
+    print()
+    print(
+        f"{GRAY}"
+        f"Video evidence:"
+        f"{RESET}"
+    )
+
+    for item in evidence_display:
+        print(
+            f"  [{item['number']}] "
+            f"{item['title']} "
+            f"(video {item['video_id']})"
+        )
+
+    print()
+
+
 def chat(
     channel_key,
     model,
@@ -1572,92 +1898,18 @@ def chat(
         if not question:
             continue
 
-        if question in {
-            "/quit",
-            "/exit",
-            "quit",
-            "exit"
-        }:
+        command = chat_command_type(
+            question
+        )
+
+        if command == "quit":
             break
 
-        if question == "/help":
-            print()
-            print(
-                f"{BOLD}{CYAN}"
-                "Richmack YouTube Knowledge Chat"
-                f"{RESET}"
-            )
-            print()
-            print(
-                "Questions can be specific to one video or "
-                "channel-wide."
-            )
-            print()
-            print(
-                f"{BOLD}Example specific questions:{RESET}"
-            )
-            print(
-                "  what is the 4x4 protocol?"
-            )
-            print(
-                "  what did Madonna say about AI?"
-            )
-            print(
-                "  tell me what they said about knights templar"
-            )
-            print()
-            print(
-                f"{BOLD}Example channel-wide questions:{RESET}"
-            )
-            print(
-                "  what are the main topics across the latest videos?"
-            )
-            print(
-                "  what is the most unusual claim discussed?"
-            )
-            print()
-            print(
-                f"{BOLD}Example follow-ups:{RESET}"
-            )
-            print(
-                "  what else is mentioned?"
-            )
-            print(
-                "  what else did they say about it?"
-            )
-            print(
-                "  go deeper"
-            )
-            print()
-            print(
-                f"{BOLD}Commands:{RESET}"
-            )
-            print(
-                "  /help      Show this help"
-            )
-            print(
-                "  /video     Show selected video"
-            )
-            print(
-                "  /sources   Show previous evidence"
-            )
-            print(
-                "  /clear     Clear video/follow-up context"
-            )
-            print(
-                "  /quit      Exit chat"
-            )
-            print()
-            print(
-                f"{GRAY}"
-                "Retrieval: channel isolation → video routing → "
-                "transcript evidence → Gemma"
-                f"{RESET}"
-            )
-            print()
+        if command == "help":
+            print_chat_help()
             continue
 
-        if question == "/clear":
+        if command == "clear":
             current_video = None
             last_evidence = []
 
@@ -1667,49 +1919,16 @@ def chat(
 
             continue
 
-        if question == "/video":
-            print()
-
-            if current_video:
-                print(
-                    "Current video: "
-                    + current_video[
-                        "metadata"
-                    ].get(
-                        "title",
-                        ""
-                    )
-                )
-            else:
-                print(
-                    "No video selected."
-                )
-
-            print()
+        if command == "video":
+            print_current_video(
+                current_video
+            )
             continue
 
-        if question == "/sources":
-            print()
-
-            for item in last_evidence:
-                if (
-                    item[
-                        "type"
-                    ]
-                    == "TRANSCRIPT"
-                ):
-                    print(
-                        f"[{item['number']}] "
-                        f"TRANSCRIPT "
-                        f"chunk {item['chunk']}"
-                    )
-                else:
-                    print(
-                        f"[{item['number']}] "
-                        f"DESCRIPTION"
-                    )
-
-            print()
+        if command == "sources":
+            print_previous_sources(
+                last_evidence
+            )
             continue
 
         progress(
@@ -1717,34 +1936,16 @@ def chat(
             10
         )
 
-        channel_wide = (
-            is_channel_wide_question(
-                question
-            )
-        )
-
-        context_followup = (
-            current_video is not None
-            and is_context_followup(
-                question
-            )
-        )
-
-        overview = (
-            current_video is not None
-            and is_overview_followup(
-                question
-            )
+        route = classify_chat_route(
+            question,
+            current_video
         )
 
         # ---------------------------------------------------------------
         # CHANNEL-WIDE QUESTION
         # ---------------------------------------------------------------
 
-        if (
-            channel_wide
-            and not context_followup
-        ):
+        if route == "channel":
             progress(
                 "Routing",
                 100
@@ -1796,106 +1997,31 @@ def chat(
                 question
             )
 
-            print()
-            print(
-                f"{BOLD}{CYAN}"
-                "╭─ RICHMACK AI ─────────────────────────────"
-                f"{RESET}"
-            )
-            print(
-                f"{CYAN}"
-                f"{answer}"
-                f"{RESET}"
-            )
-            print(
-                f"{BOLD}{CYAN}"
-                "╰────────────────────────────────────────────"
-                f"{RESET}"
+            print_answer_panel(
+                answer
             )
 
-            print()
-            print(
-                f"{GRAY}"
-                f"Video evidence:"
-                f"{RESET}"
+            print_channel_evidence(
+                evidence_display
             )
 
-            for item in evidence_display:
-                print(
-                    f"  [{item['number']}] "
-                    f"{item['title']} "
-                    f"(video {item['video_id']})"
-                )
-
-            print()
             continue
 
         # ---------------------------------------------------------------
         # SINGLE-VIDEO CONTINUATION
         # ---------------------------------------------------------------
 
-        if context_followup:
-            video = (
-                current_video
-            )
+        video, evidence = select_chat_evidence(
+            route=route,
+            question=question,
+            last_question=last_question,
+            current_video=current_video,
+            videos=videos,
+            top_k=top_k
+        )
 
-            # Use previous substantive question to preserve the topic
-            # during vague follow-ups.
-            retrieval_question = (
-                (
-                    last_question
-                    + " "
-                    + question
-                )
-                if last_question
-                else question
-            )
-
-            evidence = (
-                retrieve_transcript(
-                    retrieval_question,
-                    video,
-                    top_k=top_k
-                )
-            )
-
-            if not evidence:
-                evidence = (
-                    whole_video_sample(
-                        video,
-                        top_k=top_k
-                    )
-                )
-
-        elif overview:
-            video = (
-                current_video
-            )
-
-            evidence = (
-                whole_video_sample(
-                    video,
-                    top_k=top_k
-                )
-            )
-
-        else:
-            video = select_video(
-                question,
-                videos
-            )
-
-            current_video = (
-                video
-            )
-
-            evidence = (
-                retrieve_transcript(
-                    question,
-                    video,
-                    top_k=top_k
-                )
-            )
+        if route == "video":
+            current_video = video
 
         progress(
             "Routing",
@@ -1967,47 +2093,14 @@ def chat(
             evidence_display
         )
 
-        print()
-        print(
-            f"{BOLD}{CYAN}"
-            "╭─ RICHMACK AI ─────────────────────────────"
-            f"{RESET}"
+        print_answer_panel(
+            answer
         )
 
-        print(
-            f"{CYAN}{answer}{RESET}"
+        print_single_video_evidence(
+            evidence_display,
+            title
         )
-
-        print(
-            f"{BOLD}{CYAN}"
-            "╰────────────────────────────────────────────"
-            f"{RESET}"
-        )
-
-        print()
-        print(
-            f"{GRAY}"
-            f"Evidence:"
-            f"{RESET}"
-        )
-
-        for item in evidence_display:
-            if item[
-                "type"
-            ] == "TRANSCRIPT":
-                print(
-                    f"  [{item['number']}] "
-                    f"{title} — "
-                    f"TRANSCRIPT chunk "
-                    f"{item['chunk']}"
-                )
-            else:
-                print(
-                    f"  [{item['number']}] "
-                    f"{title} — DESCRIPTION"
-                )
-
-        print()
 
 
 ###############################################################################
