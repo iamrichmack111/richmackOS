@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
+
+ROOT="$(
+    cd "$(dirname -- "$0")/.." &&
+    pwd
+)"
+
 # RICHMACK_METRICS_COMMAND
 if [ "${1:-}" = "metrics" ]; then
     shift
-
-    ROOT="$(
-        cd "$(dirname "$0")/.." &&
-        pwd
-    )"
 
     exec python3 \
         "$ROOT/scripts/richmack-metrics" \
@@ -33,6 +34,11 @@ case "${1:-}" in
         shift
         exec "$HOME/.richmackos/youtube_cmd" \
             "$@"
+        ;;
+
+    framework)
+        shift
+        exec /usr/bin/python3             "$ROOT/scripts/richmack-framework"             "$@"
         ;;
 
     rag)

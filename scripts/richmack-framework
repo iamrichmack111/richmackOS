@@ -1,0 +1,793 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import sys
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+if str(ROOT) not in sys.path:
+    sys.path.insert(
+        0,
+        str(ROOT),
+    )
+
+
+from richmack_framework import (
+    adjusted_wpm,
+    approach_score,
+    capability_gap,
+    days_for_growth,
+    effective_progress,
+    entropy_cost,
+    growth_from_raw_reps,
+    growth_multiplier,
+    independence,
+    information_density,
+    information_mass,
+    learning_unit_components,
+    learning_unit_strict,
+    leakage_from_rate,
+    net_information_mass,
+    per_rep_improvement,
+    readiness,
+    refresh_unit,
+    refresh_unit_connected,
+    stable_reps,
+    stable_reps_for_growth,
+    target_multiplier,
+    seven_rep_growth,
+)
+
+
+def heading(
+    title,
+    topic=None,
+):
+    print()
+    print(
+        "Richmack Framework"
+    )
+    print(
+        "=" * 60
+    )
+    print(
+        title
+    )
+
+    if topic:
+        print(
+            f"Topic: {topic}"
+        )
+
+    print(
+        "-" * 60
+    )
+
+
+def cmd_reference(
+    args,
+):
+    heading(
+        "Formula Reference",
+        args.topic,
+    )
+
+    formulas = (
+        (
+            "Seven-rep growth",
+            "C_N = C_0 * 2^(N/7)",
+        ),
+        (
+            "Growth multiplier",
+            "G = 2^(N/7)",
+        ),
+        (
+            "Target repetitions",
+            "N = 7 ln(G) / ln(2)",
+        ),
+        (
+            "Days to target",
+            "d = 7 ln(G) / (m ln(2))",
+        ),
+        (
+            "Stable repetitions",
+            "S = rN",
+        ),
+        (
+            "Leakage",
+            "L = N(1-r)",
+        ),
+        (
+            "Approach score",
+            "A_i = C_i * R_i * I_i * S_i",
+        ),
+        (
+            "Learning Unit",
+            "LU = H + W + K",
+        ),
+        (
+            "Refresh Unit",
+            "RU = LU / 3",
+        ),
+        (
+            "Information Mass",
+            "M = B * log(B+1) * (R+1)",
+        ),
+        (
+            "Net Mass",
+            "M_net = M - M_anti",
+        ),
+        (
+            "Density",
+            "D = M / B",
+        ),
+        (
+            "Capability Gap",
+            "Gap = C_t - C_0",
+        ),
+        (
+            "Target Multiplier",
+            "G = C_t / C_0",
+        ),
+        (
+            "Independence",
+            "I = C_solo / C_assisted",
+        ),
+        (
+            "Readiness",
+            "R = C * S * I",
+        ),
+        (
+            "Entropy Cost",
+            "max(0, Active Items - 3)",
+        ),
+    )
+
+    for name, formula in formulas:
+        print(
+            f"{name:<22} {formula}"
+        )
+
+    print()
+
+
+def cmd_growth(
+    args,
+):
+    heading(
+        "Capability Growth",
+        args.topic,
+    )
+
+    multiplier = growth_multiplier(
+        args.reps
+    )
+
+    capability = seven_rep_growth(
+        args.baseline,
+        args.reps,
+    )
+
+    print(
+        f"Baseline capability:    {args.baseline:.4f}"
+    )
+    print(
+        f"Stable repetitions:     {args.reps:.2f}"
+    )
+    print(
+        f"Growth multiplier:      {multiplier:.4f}x"
+    )
+    print(
+        f"Resulting capability:   {capability:.4f}"
+    )
+    print(
+        f"Implied growth / rep:   "
+        f"{per_rep_improvement() * 100:.2f}%"
+    )
+    print()
+
+
+def cmd_target(
+    args,
+):
+    heading(
+        "Target Growth Planning",
+        args.topic,
+    )
+
+    reps = stable_reps_for_growth(
+        args.growth
+    )
+
+    print(
+        f"Target growth:          {args.growth:.4f}x"
+    )
+    print(
+        f"Stable reps required:   {reps:.2f}"
+    )
+
+    if args.per_day:
+        days = days_for_growth(
+            args.growth,
+            args.per_day,
+        )
+
+        print(
+            f"Approaches per day:     {args.per_day:.2f}"
+        )
+        print(
+            f"Estimated days:         {days:.2f}"
+        )
+
+    print()
+
+
+def cmd_retention(
+    args,
+):
+    heading(
+        "Retention and Leakage",
+        args.topic,
+    )
+
+    stable = stable_reps(
+        args.rate,
+        args.reps,
+    )
+
+    leakage = leakage_from_rate(
+        args.reps,
+        args.rate,
+    )
+
+    growth = growth_from_raw_reps(
+        args.baseline,
+        args.rate,
+        args.reps,
+    )
+
+    print(
+        f"Raw repetitions:        {args.reps:.2f}"
+    )
+    print(
+        f"Retention rate:         {args.rate * 100:.2f}%"
+    )
+    print(
+        f"Stable repetitions:     {stable:.2f}"
+    )
+    print(
+        f"Leakage:                {leakage:.2f}"
+    )
+    print(
+        f"Resulting capability:   {growth:.4f}"
+    )
+    print()
+
+
+def cmd_approach(
+    args,
+):
+    heading(
+        "Ieramayu Approach Score",
+        args.topic,
+    )
+
+    score = approach_score(
+        args.clarity,
+        args.relevance,
+        args.integration,
+        args.stability,
+    )
+
+    print(
+        f"Clarity:                {args.clarity:.4f}"
+    )
+    print(
+        f"Relevance:              {args.relevance:.4f}"
+    )
+    print(
+        f"Integration:            {args.integration:.4f}"
+    )
+    print(
+        f"Stability:              {args.stability:.4f}"
+    )
+    print(
+        f"Approach score:         {score:.4f}"
+    )
+    print()
+
+
+def cmd_learning(
+    args,
+):
+    heading(
+        "Learning / Refresh Units",
+        args.topic,
+    )
+
+    components = learning_unit_components(
+        args.happened,
+        args.why,
+        args.connection,
+    )
+
+    strict = learning_unit_strict(
+        bool(args.happened),
+        bool(args.why),
+        bool(args.connection),
+    )
+
+    refresh = refresh_unit(
+        args.learning_units
+    )
+
+    connected = refresh_unit_connected(
+        args.new,
+        args.old,
+        args.connections,
+    )
+
+    print(
+        f"H + W + K score:        {components:.2f}"
+    )
+    print(
+        f"Strict Learning Unit:   {strict}"
+    )
+    print(
+        f"LU supplied:            {args.learning_units:.2f}"
+    )
+    print(
+        f"Refresh Units:          {refresh:.2f}"
+    )
+    print(
+        f"Connected RU:           {connected:.2f}"
+    )
+    print()
+
+
+def cmd_mass(
+    args,
+):
+    heading(
+        "Information Mass",
+        args.topic,
+    )
+
+    mass = information_mass(
+        args.bits,
+        args.relationships,
+    )
+
+    net = net_information_mass(
+        mass,
+        args.anti_mass,
+    )
+
+    density = (
+        information_density(
+            net,
+            args.bits,
+        )
+        if args.bits > 0
+        else 0.0
+    )
+
+    print(
+        f"Information bits:       {args.bits:.2f}"
+    )
+    print(
+        f"Relationships:          {args.relationships:.2f}"
+    )
+    print(
+        f"Gross mass:             {mass:.4f}"
+    )
+    print(
+        f"Anti-mass:              {args.anti_mass:.4f}"
+    )
+    print(
+        f"Net mass:               {net:.4f}"
+    )
+    print(
+        f"Density:                {density:.4f}"
+    )
+    print()
+
+
+def cmd_capability(
+    args,
+):
+    heading(
+        "Richmack Capability Assessment",
+        args.topic,
+    )
+
+    gap = capability_gap(
+        args.target,
+        args.baseline,
+    )
+
+    multiplier = target_multiplier(
+        args.target,
+        args.baseline,
+    )
+
+    independent = independence(
+        args.solo,
+        args.assisted,
+    )
+
+    ready = readiness(
+        args.capability,
+        args.stability,
+        independent,
+    )
+
+    print(
+        f"Baseline capability:    {args.baseline:.4f}"
+    )
+    print(
+        f"Target capability:      {args.target:.4f}"
+    )
+    print(
+        f"Capability gap:         {gap:.4f}"
+    )
+    print(
+        f"Target multiplier:      {multiplier:.4f}x"
+    )
+    print(
+        f"Solo capability:        {args.solo:.4f}"
+    )
+    print(
+        f"Assisted capability:    {args.assisted:.4f}"
+    )
+    print(
+        f"Independence:           {independent:.4f}"
+    )
+    print(
+        f"Readiness:              {ready:.4f}"
+    )
+    print()
+
+
+def cmd_focus(
+    args,
+):
+    heading(
+        "Focus / Entropy",
+        args.topic,
+    )
+
+    entropy = entropy_cost(
+        args.active
+    )
+
+    progress = effective_progress(
+        args.progress,
+        entropy,
+    )
+
+    print(
+        f"Active items:           {args.active:.2f}"
+    )
+    print(
+        f"Raw progress:           {args.progress:.2f}"
+    )
+    print(
+        f"Entropy cost:           {entropy:.2f}"
+    )
+    print(
+        f"Effective progress:     {progress:.2f}"
+    )
+
+    if args.wpm is not None:
+        adjusted = adjusted_wpm(
+            args.wpm,
+            args.error_penalty,
+        )
+
+        print(
+            f"Raw WPM:                {args.wpm:.2f}"
+        )
+        print(
+            f"Error penalty:          {args.error_penalty:.2f}"
+        )
+        print(
+            f"Adjusted WPM:           {adjusted:.2f}"
+        )
+
+    print()
+
+
+def add_topic(
+    parser,
+):
+    parser.add_argument(
+        "--topic",
+        default=None,
+        help=(
+            "Optional subject label, for example "
+            "'Hebrew', 'Python', or 'World War II'."
+        ),
+    )
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        prog="richmack framework",
+        description=(
+            "Richmack Framework learning and capability engine."
+        ),
+    )
+
+    sub = parser.add_subparsers(
+        dest="command",
+    )
+
+    reference = sub.add_parser(
+        "reference",
+        help="Show framework formulas.",
+    )
+    add_topic(reference)
+    reference.set_defaults(
+        func=cmd_reference
+    )
+
+    growth = sub.add_parser(
+        "growth",
+        help="Calculate seven-rep capability growth.",
+    )
+    growth.add_argument(
+        "--baseline",
+        type=float,
+        default=1.0,
+    )
+    growth.add_argument(
+        "--reps",
+        type=float,
+        required=True,
+        help="Stable repetitions.",
+    )
+    add_topic(growth)
+    growth.set_defaults(
+        func=cmd_growth
+    )
+
+    target = sub.add_parser(
+        "target",
+        help="Calculate repetitions needed for target growth.",
+    )
+    target.add_argument(
+        "--growth",
+        type=float,
+        required=True,
+    )
+    target.add_argument(
+        "--per-day",
+        type=float,
+        default=None,
+    )
+    add_topic(target)
+    target.set_defaults(
+        func=cmd_target
+    )
+
+    retention = sub.add_parser(
+        "retention",
+        help="Calculate stable reps and leakage.",
+    )
+    retention.add_argument(
+        "--reps",
+        type=float,
+        required=True,
+    )
+    retention.add_argument(
+        "--rate",
+        type=float,
+        required=True,
+        help="Retention rate from 0 to 1.",
+    )
+    retention.add_argument(
+        "--baseline",
+        type=float,
+        default=1.0,
+    )
+    add_topic(retention)
+    retention.set_defaults(
+        func=cmd_retention
+    )
+
+    approach = sub.add_parser(
+        "approach",
+        help="Calculate IAM approach quality.",
+    )
+    approach.add_argument(
+        "--clarity",
+        type=float,
+        required=True,
+    )
+    approach.add_argument(
+        "--relevance",
+        type=float,
+        required=True,
+    )
+    approach.add_argument(
+        "--integration",
+        type=float,
+        required=True,
+    )
+    approach.add_argument(
+        "--stability",
+        type=float,
+        required=True,
+    )
+    add_topic(approach)
+    approach.set_defaults(
+        func=cmd_approach
+    )
+
+    learning = sub.add_parser(
+        "learning",
+        help="Calculate Learning and Refresh Units.",
+    )
+    learning.add_argument(
+        "--happened",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--why",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--connection",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--learning-units",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--new",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--old",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--connections",
+        type=float,
+        default=1,
+    )
+    add_topic(learning)
+    learning.set_defaults(
+        func=cmd_learning
+    )
+
+    mass = sub.add_parser(
+        "mass",
+        help="Calculate Information Mass and density.",
+    )
+    mass.add_argument(
+        "--bits",
+        type=float,
+        required=True,
+    )
+    mass.add_argument(
+        "--relationships",
+        type=float,
+        required=True,
+    )
+    mass.add_argument(
+        "--anti-mass",
+        type=float,
+        default=0.0,
+    )
+    add_topic(mass)
+    mass.set_defaults(
+        func=cmd_mass
+    )
+
+    capability = sub.add_parser(
+        "capability",
+        help="Calculate capability gap, independence and readiness.",
+    )
+    capability.add_argument(
+        "--baseline",
+        type=float,
+        required=True,
+    )
+    capability.add_argument(
+        "--target",
+        type=float,
+        required=True,
+    )
+    capability.add_argument(
+        "--solo",
+        type=float,
+        required=True,
+    )
+    capability.add_argument(
+        "--assisted",
+        type=float,
+        required=True,
+    )
+    capability.add_argument(
+        "--capability",
+        type=float,
+        required=True,
+    )
+    capability.add_argument(
+        "--stability",
+        type=float,
+        required=True,
+    )
+    add_topic(capability)
+    capability.set_defaults(
+        func=cmd_capability
+    )
+
+    focus = sub.add_parser(
+        "focus",
+        help="Calculate entropy and effective progress.",
+    )
+    focus.add_argument(
+        "--active",
+        type=float,
+        required=True,
+    )
+    focus.add_argument(
+        "--progress",
+        type=float,
+        required=True,
+    )
+    focus.add_argument(
+        "--wpm",
+        type=float,
+        default=None,
+    )
+    focus.add_argument(
+        "--error-penalty",
+        type=float,
+        default=0.0,
+    )
+    add_topic(focus)
+    focus.set_defaults(
+        func=cmd_focus
+    )
+
+    return parser
+
+
+def main():
+    parser = build_parser()
+
+    args = parser.parse_args()
+
+    if not args.command:
+        args = parser.parse_args(
+            ["reference"]
+        )
+
+    try:
+        args.func(
+            args
+        )
+
+    except ValueError as exc:
+        parser.error(
+            str(exc)
+        )
+
+
+if __name__ == "__main__":
+    main()
