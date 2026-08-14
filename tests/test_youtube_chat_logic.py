@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from unittest.mock import patch
 
 import youtube_chat_v2 as yc
@@ -448,11 +450,12 @@ class ChannelQuestionExecutionTests(unittest.TestCase):
                 "progress",
             ),
         ):
-            result = yc.run_channel_question(
-                model="model",
-                question="most unusual claim",
-                videos=videos,
-            )
+            with redirect_stdout(StringIO()):
+                result = yc.run_channel_question(
+                    model="model",
+                    question="most unusual claim",
+                    videos=videos,
+                )
 
         self.assertEqual(
             result["answer"],
@@ -493,11 +496,12 @@ class ChannelQuestionExecutionTests(unittest.TestCase):
                 "progress",
             ),
         ):
-            result = yc.run_channel_question(
-                model="model",
-                question="main topics",
-                videos=[],
-            )
+            with redirect_stdout(StringIO()):
+                result = yc.run_channel_question(
+                    model="model",
+                    question="main topics",
+                    videos=[],
+                )
 
         self.assertIsNone(
             result["current_video"]
@@ -564,15 +568,16 @@ class VideoQuestionExecutionTests(unittest.TestCase):
                 "progress",
             ),
         ):
-            result = yc.run_video_question(
-                route="video",
-                model="model",
-                question="AI",
-                last_question=None,
-                current_video=None,
-                videos=[video],
-                top_k=6,
-            )
+            with redirect_stdout(StringIO()):
+                result = yc.run_video_question(
+                    route="video",
+                    model="model",
+                    question="AI",
+                    last_question=None,
+                    current_video=None,
+                    videos=[video],
+                    top_k=6,
+                )
 
         self.assertIs(
             result["current_video"],
@@ -630,15 +635,16 @@ class VideoQuestionExecutionTests(unittest.TestCase):
                 "progress",
             ),
         ):
-            yc.run_video_question(
-                route="video",
-                model="model",
-                question="question",
-                last_question=None,
-                current_video=None,
-                videos=[video],
-                top_k=6,
-            )
+            with redirect_stdout(StringIO()):
+                yc.run_video_question(
+                    route="video",
+                    model="model",
+                    question="question",
+                    last_question=None,
+                    current_video=None,
+                    videos=[video],
+                    top_k=6,
+                )
 
         generate.assert_called_once_with(
             "model",
@@ -683,15 +689,16 @@ class VideoQuestionExecutionTests(unittest.TestCase):
                 "progress",
             ),
         ):
-            result = yc.run_video_question(
-                route="context",
-                model="model",
-                question="what else?",
-                last_question="AI",
-                current_video=current,
-                videos=[current],
-                top_k=6,
-            )
+            with redirect_stdout(StringIO()):
+                result = yc.run_video_question(
+                    route="context",
+                    model="model",
+                    question="what else?",
+                    last_question="AI",
+                    current_video=current,
+                    videos=[current],
+                    top_k=6,
+                )
 
         self.assertIs(
             result["current_video"],
