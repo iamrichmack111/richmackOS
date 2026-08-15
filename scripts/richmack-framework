@@ -1,0 +1,1888 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import sys
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+if str(ROOT) not in sys.path:
+    sys.path.insert(
+        0,
+        str(ROOT),
+    )
+
+
+from richmack_framework.database import (
+    add_session,
+    add_topic as db_add_topic,
+    list_topics,
+    topic_sessions,
+)
+
+from richmack_framework.tracker import (
+    topic_summary,
+)
+
+
+from richmack_framework.knowledge import (
+    add_concept as knowledge_add_concept,
+    add_mistake as knowledge_add_mistake,
+    add_note as knowledge_add_note,
+    add_question as knowledge_add_question,
+    add_relation as knowledge_add_relation,
+    knowledge_summary,
+    list_concepts as knowledge_list_concepts,
+    set_confidence as knowledge_set_confidence,
+)
+
+
+from richmack_framework.ai import (
+    DEFAULT_MODEL,
+    ask_framework,
+)
+
+
+from richmack_ui import (
+    BOLD,
+    CYAN,
+    GREEN,
+    MAGENTA,
+    RED,
+    RESET,
+    YELLOW,
+    color,
+    metric_bar,
+    panel,
+    print_ai,
+    print_error,
+    print_info,
+    print_metric,
+    print_success,
+    print_warning,
+)
+
+
+from richmack_framework import (
+    adjusted_wpm,
+    approach_score,
+    capability_gap,
+    days_for_growth,
+    effective_progress,
+    entropy_cost,
+    growth_from_raw_reps,
+    growth_multiplier,
+    independence,
+    information_density,
+    information_mass,
+    learning_unit_components,
+    learning_unit_strict,
+    leakage_from_rate,
+    net_information_mass,
+    per_rep_improvement,
+    readiness,
+    refresh_unit,
+    refresh_unit_connected,
+    stable_reps,
+    stable_reps_for_growth,
+    target_multiplier,
+    seven_rep_growth,
+)
+
+
+def heading(
+    title,
+    topic=None,
+):
+    print()
+
+    subtitle = (
+        f"Topic: {topic}"
+        if topic
+        else None
+    )
+
+    print(
+        panel(
+            title,
+            subtitle=subtitle,
+            ansi=CYAN,
+        )
+    )
+
+    print()
+
+
+def cmd_reference(
+    args,
+):
+    heading(
+        "Formula Reference",
+        args.topic,
+    )
+
+    formulas = (
+        (
+            "Seven-rep growth",
+            "C_N = C_0 * 2^(N/7)",
+        ),
+        (
+            "Growth multiplier",
+            "G = 2^(N/7)",
+        ),
+        (
+            "Target repetitions",
+            "N = 7 ln(G) / ln(2)",
+        ),
+        (
+            "Days to target",
+            "d = 7 ln(G) / (m ln(2))",
+        ),
+        (
+            "Stable repetitions",
+            "S = rN",
+        ),
+        (
+            "Leakage",
+            "L = N(1-r)",
+        ),
+        (
+            "Approach score",
+            "A_i = C_i * R_i * I_i * S_i",
+        ),
+        (
+            "Learning Unit",
+            "LU = H + W + K",
+        ),
+        (
+            "Refresh Unit",
+            "RU = LU / 3",
+        ),
+        (
+            "Information Mass",
+            "M = B * log(B+1) * (R+1)",
+        ),
+        (
+            "Net Mass",
+            "M_net = M - M_anti",
+        ),
+        (
+            "Density",
+            "D = M / B",
+        ),
+        (
+            "Capability Gap",
+            "Gap = C_t - C_0",
+        ),
+        (
+            "Target Multiplier",
+            "G = C_t / C_0",
+        ),
+        (
+            "Independence",
+            "I = C_solo / C_assisted",
+        ),
+        (
+            "Readiness",
+            "R = C * S * I",
+        ),
+        (
+            "Entropy Cost",
+            "max(0, Active Items - 3)",
+        ),
+    )
+
+    for name, formula in formulas:
+        print(
+            f"{name:<22} {formula}"
+        )
+
+    print()
+
+
+def cmd_growth(
+    args,
+):
+    heading(
+        "Capability Growth",
+        args.topic,
+    )
+
+    multiplier = growth_multiplier(
+        args.reps
+    )
+
+    capability = seven_rep_growth(
+        args.baseline,
+        args.reps,
+    )
+
+    print(
+        f"Baseline capability:    {args.baseline:.4f}"
+    )
+    print(
+        f"Stable repetitions:     {args.reps:.2f}"
+    )
+    print(
+        f"Growth multiplier:      {multiplier:.4f}x"
+    )
+    print(
+        f"Resulting capability:   {capability:.4f}"
+    )
+    print(
+        f"Implied growth / rep:   "
+        f"{per_rep_improvement() * 100:.2f}%"
+    )
+    print()
+
+
+def cmd_target(
+    args,
+):
+    heading(
+        "Target Growth Planning",
+        args.topic,
+    )
+
+    reps = stable_reps_for_growth(
+        args.growth
+    )
+
+    print(
+        f"Target growth:          {args.growth:.4f}x"
+    )
+    print(
+        f"Stable reps required:   {reps:.2f}"
+    )
+
+    if args.per_day:
+        days = days_for_growth(
+            args.growth,
+            args.per_day,
+        )
+
+        print(
+            f"Approaches per day:     {args.per_day:.2f}"
+        )
+        print(
+            f"Estimated days:         {days:.2f}"
+        )
+
+    print()
+
+
+def cmd_retention(
+    args,
+):
+    heading(
+        "Retention and Leakage",
+        args.topic,
+    )
+
+    stable = stable_reps(
+        args.rate,
+        args.reps,
+    )
+
+    leakage = leakage_from_rate(
+        args.reps,
+        args.rate,
+    )
+
+    growth = growth_from_raw_reps(
+        args.baseline,
+        args.rate,
+        args.reps,
+    )
+
+    print(
+        f"Raw repetitions:        {args.reps:.2f}"
+    )
+    print(
+        f"Retention rate:         {args.rate * 100:.2f}%"
+    )
+    print(
+        f"Stable repetitions:     {stable:.2f}"
+    )
+    print(
+        f"Leakage:                {leakage:.2f}"
+    )
+    print(
+        f"Resulting capability:   {growth:.4f}"
+    )
+    print()
+
+
+def cmd_approach(
+    args,
+):
+    heading(
+        "Ieramayu Approach Score",
+        args.topic,
+    )
+
+    score = approach_score(
+        args.clarity,
+        args.relevance,
+        args.integration,
+        args.stability,
+    )
+
+    print(
+        f"Clarity:                {args.clarity:.4f}"
+    )
+    print(
+        f"Relevance:              {args.relevance:.4f}"
+    )
+    print(
+        f"Integration:            {args.integration:.4f}"
+    )
+    print(
+        f"Stability:              {args.stability:.4f}"
+    )
+    print(
+        f"Approach score:         {score:.4f}"
+    )
+    print()
+
+
+def cmd_learning(
+    args,
+):
+    heading(
+        "Learning / Refresh Units",
+        args.topic,
+    )
+
+    components = learning_unit_components(
+        args.happened,
+        args.why,
+        args.connection,
+    )
+
+    strict = learning_unit_strict(
+        bool(args.happened),
+        bool(args.why),
+        bool(args.connection),
+    )
+
+    refresh = refresh_unit(
+        args.learning_units
+    )
+
+    connected = refresh_unit_connected(
+        args.new,
+        args.old,
+        args.connections,
+    )
+
+    print(
+        f"Component score:        {components:.2f}"
+    )
+    print(
+        f"Strict LU earned:       {strict}"
+    )
+    print(
+        f"Manual LU supplied:     {args.learning_units:.2f}"
+    )
+    print(
+        f"Refresh Units:          {refresh:.2f}"
+    )
+    print(
+        f"Connected RU:           {connected:.2f}"
+    )
+    print()
+
+
+def cmd_mass(
+    args,
+):
+    heading(
+        "Information Mass",
+        args.topic,
+    )
+
+    mass = information_mass(
+        args.bits,
+        args.relationships,
+    )
+
+    net = net_information_mass(
+        mass,
+        args.anti_mass,
+    )
+
+    density = (
+        information_density(
+            net,
+            args.bits,
+        )
+        if args.bits > 0
+        else 0.0
+    )
+
+    print(
+        f"Information bits:       {args.bits:.2f}"
+    )
+    print(
+        f"Relationships:          {args.relationships:.2f}"
+    )
+    print(
+        f"Gross mass:             {mass:.4f}"
+    )
+    print(
+        f"Anti-mass:              {args.anti_mass:.4f}"
+    )
+    print(
+        f"Net mass:               {net:.4f}"
+    )
+    print(
+        f"Density:                {density:.4f}"
+    )
+    print()
+
+
+def cmd_capability(
+    args,
+):
+    heading(
+        "Richmack Capability Assessment",
+        args.topic,
+    )
+
+    gap = capability_gap(
+        args.target,
+        args.baseline,
+    )
+
+    multiplier = target_multiplier(
+        args.target,
+        args.baseline,
+    )
+
+    independent = independence(
+        args.solo,
+        args.assisted,
+    )
+
+    ready = readiness(
+        args.capability,
+        args.stability,
+        independent,
+    )
+
+    print(
+        f"Baseline capability:    {args.baseline:.4f}"
+    )
+    print(
+        f"Target capability:      {args.target:.4f}"
+    )
+    print(
+        f"Capability gap:         {gap:.4f}"
+    )
+    print(
+        f"Target multiplier:      {multiplier:.4f}x"
+    )
+    print(
+        f"Solo capability:        {args.solo:.4f}"
+    )
+    print(
+        f"Assisted capability:    {args.assisted:.4f}"
+    )
+    print(
+        f"Independence:           {independent:.4f}"
+    )
+    print(
+        f"Readiness:              {ready:.4f}"
+    )
+    print()
+
+
+def cmd_focus(
+    args,
+):
+    heading(
+        "Focus / Entropy",
+        args.topic,
+    )
+
+    entropy = entropy_cost(
+        args.active
+    )
+
+    progress = effective_progress(
+        args.progress,
+        entropy,
+    )
+
+    print(
+        f"Active items:           {args.active:.2f}"
+    )
+    print(
+        f"Raw progress:           {args.progress:.2f}"
+    )
+    print(
+        f"Entropy cost:           {entropy:.2f}"
+    )
+    print(
+        f"Effective progress:     {progress:.2f}"
+    )
+
+    if args.wpm is not None:
+        adjusted = adjusted_wpm(
+            args.wpm,
+            args.error_penalty,
+        )
+
+        print(
+            f"Raw WPM:                {args.wpm:.2f}"
+        )
+        print(
+            f"Error penalty:          {args.error_penalty:.2f}"
+        )
+        print(
+            f"Adjusted WPM:           {adjusted:.2f}"
+        )
+
+    print()
+
+
+
+
+def cmd_ask(
+    args,
+):
+    heading(
+        "Richmack Personal Tutor",
+        args.topic_name,
+    )
+
+    print_info(f"Model: {args.model}")
+    print_info(
+        "Loading Richmack Framework learning profile"
+    )
+
+    try:
+        answer, context = ask_framework(
+            args.topic_name,
+            args.question,
+            model=args.model,
+            history_limit=args.history_limit,
+            timeout=args.timeout,
+        )
+    except (
+        ValueError,
+        RuntimeError,
+    ) as exc:
+        print_error(str(exc))
+        return 1
+
+    print()
+    print(
+        panel(
+            "RICHMACK AI",
+            subtitle=f"{context.topic} personal tutor",
+            ansi=MAGENTA,
+        )
+    )
+    print()
+    print_ai(answer)
+    print()
+
+    summary = context.summary
+
+    print(
+        color(
+            "Framework context used:",
+            CYAN,
+        )
+    )
+    print(f"  Sessions: {summary['sessions']}")
+    print(f"  Stable reps: {summary['stable_reps']:.2f}")
+    print(f"  Retention: {summary['retention'] * 100:.2f}%")
+    print(f"  Learning Units: {summary['learning_units']:.2f}")
+    print(f"  Connections: {summary['connections']:.2f}")
+    print()
+
+    return 0
+
+
+
+def cmd_knowledge_concept_add(
+    args,
+):
+    concept_id = knowledge_add_concept(
+        args.topic_name,
+        args.concept,
+        description=args.description,
+    )
+
+    heading(
+        "Concept Added",
+        args.topic_name,
+    )
+
+    print_success(
+        f"Concept #{concept_id}: "
+        f"{args.concept}"
+    )
+
+    print()
+
+    return 0
+
+
+def cmd_knowledge_concept_list(
+    args,
+):
+    rows = knowledge_list_concepts(
+        args.topic_name
+    )
+
+    heading(
+        "Knowledge Concepts",
+        args.topic_name,
+    )
+
+    if not rows:
+        print_warning(
+            "No concepts recorded."
+        )
+
+        print()
+        return 0
+
+    for row in rows:
+        confidence = row[
+            "confidence"
+        ]
+
+        if confidence is None:
+            confidence_text = (
+                "not recorded"
+            )
+        else:
+            confidence_text = (
+                f"{float(confidence) * 100:.1f}%"
+            )
+
+        print(
+            f"• {row['name']}"
+        )
+
+        if row["description"]:
+            print(
+                f"    {row['description']}"
+            )
+
+        print(
+            f"    confidence: "
+            f"{confidence_text}"
+        )
+
+    print()
+
+    return 0
+
+
+def _print_knowledge_record(
+    title,
+    topic,
+    record_id,
+):
+    heading(
+        title,
+        topic,
+    )
+
+    print_success(
+        f"Stored record #{record_id}"
+    )
+
+    print()
+
+
+def cmd_knowledge_note(
+    args,
+):
+    record_id = knowledge_add_note(
+        args.topic_name,
+        args.text,
+        concept_name=args.concept,
+    )
+
+    _print_knowledge_record(
+        "Knowledge Note Added",
+        args.topic_name,
+        record_id,
+    )
+
+    return 0
+
+
+def cmd_knowledge_mistake(
+    args,
+):
+    record_id = knowledge_add_mistake(
+        args.topic_name,
+        args.text,
+        concept_name=args.concept,
+    )
+
+    _print_knowledge_record(
+        "Mistake Recorded",
+        args.topic_name,
+        record_id,
+    )
+
+    return 0
+
+
+def cmd_knowledge_question(
+    args,
+):
+    record_id = knowledge_add_question(
+        args.topic_name,
+        args.text,
+        concept_name=args.concept,
+    )
+
+    _print_knowledge_record(
+        "Question Recorded",
+        args.topic_name,
+        record_id,
+    )
+
+    return 0
+
+
+def cmd_knowledge_confidence(
+    args,
+):
+    record_id = knowledge_set_confidence(
+        args.topic_name,
+        args.concept,
+        args.score,
+        source=args.source,
+    )
+
+    heading(
+        "Concept Confidence Updated",
+        args.topic_name,
+    )
+
+    print_success(
+        f"{args.concept}: "
+        f"{args.score * 100:.1f}%"
+    )
+
+    print(
+        f"Confidence record ID:   "
+        f"{record_id}"
+    )
+
+    print()
+
+    return 0
+
+
+def cmd_knowledge_relate(
+    args,
+):
+    record_id = knowledge_add_relation(
+        args.topic_name,
+        args.concept_a,
+        args.concept_b,
+        relation=args.relation,
+        strength=args.strength,
+    )
+
+    heading(
+        "Knowledge Connection Added",
+        args.topic_name,
+    )
+
+    print_success(
+        f"{args.concept_a} "
+        f"--{args.relation}--> "
+        f"{args.concept_b}"
+    )
+
+    print(
+        f"Strength:               "
+        f"{args.strength:.2f}"
+    )
+
+    print(
+        f"Relationship ID:        "
+        f"{record_id}"
+    )
+
+    print()
+
+    return 0
+
+
+def cmd_knowledge_show(
+    args,
+):
+    result = knowledge_summary(
+        args.topic_name
+    )
+
+    heading(
+        "Knowledge Map",
+        args.topic_name,
+    )
+
+    print(
+        color(
+            "Concepts",
+            CYAN,
+        )
+    )
+
+    concepts = result[
+        "concepts"
+    ]
+
+    if not concepts:
+        print(
+            "  None recorded."
+        )
+
+    for item in concepts:
+        confidence = item.get(
+            "confidence"
+        )
+
+        if confidence is None:
+            confidence_text = "?"
+        else:
+            confidence_text = (
+                f"{float(confidence) * 100:.0f}%"
+            )
+
+        print(
+            f"  • {item['name']} "
+            f"[{confidence_text}]"
+        )
+
+        description = (
+            item.get(
+                "description"
+            )
+            or ""
+        ).strip()
+
+        if description:
+            print(
+                f"      {description}"
+            )
+
+    groups = (
+        (
+            "Notes",
+            "notes",
+        ),
+        (
+            "Mistakes",
+            "mistakes",
+        ),
+        (
+            "Questions",
+            "questions",
+        ),
+    )
+
+    for title, key in groups:
+        print()
+
+        print(
+            color(
+                title,
+                CYAN,
+            )
+        )
+
+        rows = result[
+            key
+        ]
+
+        if not rows:
+            print(
+                "  None recorded."
+            )
+
+        for item in rows[:25]:
+            concept = (
+                item.get(
+                    "concept"
+                )
+                or ""
+            ).strip()
+
+            prefix = (
+                f"[{concept}] "
+                if concept
+                else ""
+            )
+
+            print(
+                f"  • {prefix}"
+                f"{item['body']}"
+            )
+
+    print()
+
+    print(
+        color(
+            "Relationships",
+            CYAN,
+        )
+    )
+
+    relations = result[
+        "relations"
+    ]
+
+    if not relations:
+        print(
+            "  None recorded."
+        )
+
+    for item in relations[:25]:
+        print(
+            f"  • {item['concept_a']} "
+            f"--{item['relation']}--> "
+            f"{item['concept_b']} "
+            f"[{float(item['strength']):.2f}]"
+        )
+
+    print()
+
+    return 0
+
+
+def cmd_topic_add(
+    args,
+):
+    topic_id = db_add_topic(
+        args.name,
+        description=args.description,
+    )
+
+    heading(
+        "Topic Created",
+        args.name,
+    )
+
+    print_success(
+        f"Topic created with ID {topic_id}"
+    )
+    print(
+        f"Description:            {args.description}"
+    )
+    print()
+
+
+def cmd_topic_list(
+    args,
+):
+    heading(
+        "Tracked Topics"
+    )
+
+    rows = list_topics()
+
+    if not rows:
+        print(
+            "No tracked topics."
+        )
+        print()
+        return
+
+    for row in rows:
+        print(
+            f"{row['name']:<30} "
+            f"sessions={row['session_count']}"
+        )
+
+    print()
+
+
+def cmd_log(
+    args,
+):
+    if args.stable_reps is None:
+        stable = (
+            args.raw_reps
+            * args.retention
+        )
+
+    else:
+        stable = args.stable_reps
+
+    if args.refresh_units is None:
+        refresh = (
+            args.learning_units
+            / 3
+        )
+
+    else:
+        refresh = args.refresh_units
+
+    session_id = add_session(
+        args.topic_name,
+        raw_reps=args.raw_reps,
+        stable_reps=stable,
+        learning_units=args.learning_units,
+        refresh_units=refresh,
+        connections=args.connections,
+        anti_mass=args.anti_mass,
+        capability=args.capability,
+        assisted_capability=args.assisted,
+        solo_capability=args.solo,
+        notes=args.notes,
+    )
+
+    heading(
+        "Learning Session Logged",
+        args.topic_name,
+    )
+
+    print_success(
+        f"Learning session logged: {session_id}"
+    )
+    print(
+        f"Raw repetitions:        {args.raw_reps:.2f}"
+    )
+    print(
+        f"Stable repetitions:     {stable:.2f}"
+    )
+    print(
+        f"Learning Units:         {args.learning_units:.2f}"
+    )
+    print(
+        f"Refresh Units:          {refresh:.2f}"
+    )
+    print(
+        f"Connections:            {args.connections:.2f}"
+    )
+    print()
+
+
+def cmd_status(
+    args,
+):
+    result = topic_summary(
+        args.topic_name
+    )
+
+    heading(
+        "Topic Status",
+        result["topic"],
+    )
+
+    print(
+        f"Sessions:               {result['sessions']}"
+    )
+    print(
+        f"Raw repetitions:        {result['raw_reps']:.2f}"
+    )
+    print(
+        f"Stable repetitions:     {result['stable_reps']:.2f}"
+    )
+
+    print()
+    print_metric(
+        "Retention",
+        result["retention"],
+    )
+
+    if result["latest_capability"] is not None:
+        print_metric(
+            "Capability",
+            result["latest_capability"],
+        )
+
+    print()
+
+    leakage_ratio = (
+        result["leakage"]
+        / result["raw_reps"]
+        if result["raw_reps"]
+        else 0.0
+    )
+
+    leakage_bar = metric_bar(
+        leakage_ratio,
+        maximum=1.0,
+    )
+
+    leakage_color = (
+        GREEN
+        if leakage_ratio <= 0.20
+        else YELLOW
+        if leakage_ratio <= 0.40
+        else RED
+    )
+
+    print(
+        f"{'Leakage':<24} "
+        f"{color(leakage_bar, leakage_color)} "
+        f"{leakage_ratio * 100:.1f}%"
+    )
+
+    print()
+    print(
+        f"Learning Units:         {result['learning_units']:.2f}"
+    )
+    print(
+        f"Refresh Units:          {result['refresh_units']:.2f}"
+    )
+    print(
+        f"Connections:            {result['connections']:.2f}"
+    )
+    print(
+        color(
+            f"Growth multiplier:      "
+            f"{result['growth_multiplier']:.4f}x",
+            GREEN,
+        )
+    )
+    print(
+        f"Net information mass:   {result['net_mass']:.4f}"
+    )
+    print(
+        f"Information density:    {result['density']:.4f}"
+    )
+
+    print()
+
+
+def cmd_history(
+    args,
+):
+    rows = topic_sessions(
+        args.topic_name
+    )
+
+    heading(
+        "Topic History",
+        args.topic_name,
+    )
+
+    if not rows:
+        print(
+            "No sessions recorded."
+        )
+        print()
+        return
+
+    for row in rows:
+        print(
+            f"[{row['id']}] "
+            f"{row['created_at']} "
+            f"raw={row['raw_reps']:.2f} "
+            f"stable={row['stable_reps']:.2f} "
+            f"LU={row['learning_units']:.2f} "
+            f"RU={row['refresh_units']:.2f} "
+            f"connections={row['connections']:.2f}"
+        )
+
+        if row["notes"]:
+            print(
+                f"    {row['notes']}"
+            )
+
+    print()
+
+
+def add_topic(
+    parser,
+):
+    parser.add_argument(
+        "--topic",
+        default=None,
+        help=(
+            "Optional subject label, for example "
+            "'Hebrew', 'Python', or 'World War II'."
+        ),
+    )
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        prog="richmack framework",
+        description=(
+            "Richmack Framework learning and capability engine."
+        ),
+    )
+
+    sub = parser.add_subparsers(
+        dest="command",
+    )
+
+    ask = sub.add_parser(
+        "ask",
+        help=(
+            "Ask the personal AI tutor a question "
+            "grounded in tracked learning history."
+        ),
+        description=(
+            "Ask the Richmack personal AI tutor a question "
+            "grounded in your tracked learning history."
+        ),
+    )
+
+    ask.add_argument(
+        "topic_name",
+        help="Tracked topic name.",
+    )
+
+    ask.add_argument(
+        "--question",
+        "-q",
+        required=True,
+        help="Question for the personal tutor.",
+    )
+
+    ask.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help=(
+            "Ollama model. "
+            f"Default: {DEFAULT_MODEL}"
+        ),
+    )
+
+    ask.add_argument(
+        "--history-limit",
+        type=int,
+        default=12,
+    )
+
+    ask.add_argument(
+        "--timeout",
+        type=float,
+        default=600.0,
+    )
+
+    ask.set_defaults(
+        func=cmd_ask
+    )
+
+    knowledge = sub.add_parser(
+        "knowledge",
+        help=(
+            "Manage structured personal "
+            "knowledge for a topic."
+        ),
+        description=(
+            "Store concepts, notes, mistakes, "
+            "questions, confidence scores, "
+            "and relationships."
+        ),
+    )
+
+    knowledge_sub = knowledge.add_subparsers(
+        dest="knowledge_command",
+        required=True,
+    )
+
+    concept_add = knowledge_sub.add_parser(
+        "concept-add",
+        help="Add a concept.",
+    )
+
+    concept_add.add_argument(
+        "topic_name",
+    )
+
+    concept_add.add_argument(
+        "concept",
+    )
+
+    concept_add.add_argument(
+        "--description",
+        default="",
+    )
+
+    concept_add.set_defaults(
+        func=cmd_knowledge_concept_add
+    )
+
+    concept_list = knowledge_sub.add_parser(
+        "concept-list",
+        help="List concepts.",
+    )
+
+    concept_list.add_argument(
+        "topic_name",
+    )
+
+    concept_list.set_defaults(
+        func=cmd_knowledge_concept_list
+    )
+
+    note = knowledge_sub.add_parser(
+        "note",
+        help="Store a knowledge note.",
+    )
+
+    note.add_argument(
+        "topic_name",
+    )
+
+    note.add_argument(
+        "--text",
+        required=True,
+    )
+
+    note.add_argument(
+        "--concept",
+        default=None,
+    )
+
+    note.set_defaults(
+        func=cmd_knowledge_note
+    )
+
+    mistake = knowledge_sub.add_parser(
+        "mistake",
+        help="Record a mistake.",
+    )
+
+    mistake.add_argument(
+        "topic_name",
+    )
+
+    mistake.add_argument(
+        "--text",
+        required=True,
+    )
+
+    mistake.add_argument(
+        "--concept",
+        default=None,
+    )
+
+    mistake.set_defaults(
+        func=cmd_knowledge_mistake
+    )
+
+    question = knowledge_sub.add_parser(
+        "question",
+        help="Record an open question.",
+    )
+
+    question.add_argument(
+        "topic_name",
+    )
+
+    question.add_argument(
+        "--text",
+        required=True,
+    )
+
+    question.add_argument(
+        "--concept",
+        default=None,
+    )
+
+    question.set_defaults(
+        func=cmd_knowledge_question
+    )
+
+    confidence = knowledge_sub.add_parser(
+        "confidence",
+        help="Set confidence for a concept.",
+    )
+
+    confidence.add_argument(
+        "topic_name",
+    )
+
+    confidence.add_argument(
+        "concept",
+    )
+
+    confidence.add_argument(
+        "score",
+        type=float,
+        help="Confidence from 0.0 to 1.0.",
+    )
+
+    confidence.add_argument(
+        "--source",
+        default="manual",
+    )
+
+    confidence.set_defaults(
+        func=cmd_knowledge_confidence
+    )
+
+    relate = knowledge_sub.add_parser(
+        "relate",
+        help="Connect two concepts.",
+    )
+
+    relate.add_argument(
+        "topic_name",
+    )
+
+    relate.add_argument(
+        "concept_a",
+    )
+
+    relate.add_argument(
+        "concept_b",
+    )
+
+    relate.add_argument(
+        "--relation",
+        default="related",
+    )
+
+    relate.add_argument(
+        "--strength",
+        type=float,
+        default=1.0,
+    )
+
+    relate.set_defaults(
+        func=cmd_knowledge_relate
+    )
+
+    show = knowledge_sub.add_parser(
+        "show",
+        help="Show the knowledge map.",
+    )
+
+    show.add_argument(
+        "topic_name",
+    )
+
+    show.set_defaults(
+        func=cmd_knowledge_show
+    )
+
+    topic = sub.add_parser(
+        "topic",
+        help="Create and list tracked learning topics.",
+    )
+
+    topic_sub = topic.add_subparsers(
+        dest="topic_command",
+        required=True,
+    )
+
+    topic_add = topic_sub.add_parser(
+        "add",
+        help="Create a tracked topic.",
+    )
+
+    topic_add.add_argument(
+        "name",
+    )
+
+    topic_add.add_argument(
+        "--description",
+        default="",
+    )
+
+    topic_add.set_defaults(
+        func=cmd_topic_add
+    )
+
+    topic_list = topic_sub.add_parser(
+        "list",
+        help="List tracked topics.",
+    )
+
+    topic_list.set_defaults(
+        func=cmd_topic_list
+    )
+
+    log = sub.add_parser(
+        "log",
+        help="Record a learning/practice session.",
+    )
+
+    log.add_argument(
+        "topic_name",
+    )
+
+    log.add_argument(
+        "--raw-reps",
+        type=float,
+        default=0,
+    )
+
+    log.add_argument(
+        "--stable-reps",
+        type=float,
+        default=None,
+    )
+
+    log.add_argument(
+        "--retention",
+        type=float,
+        default=1.0,
+    )
+
+    log.add_argument(
+        "--learning-units",
+        type=float,
+        default=0,
+    )
+
+    log.add_argument(
+        "--refresh-units",
+        type=float,
+        default=None,
+    )
+
+    log.add_argument(
+        "--connections",
+        type=float,
+        default=0,
+    )
+
+    log.add_argument(
+        "--anti-mass",
+        type=float,
+        default=0,
+    )
+
+    log.add_argument(
+        "--capability",
+        type=float,
+        default=None,
+    )
+
+    log.add_argument(
+        "--assisted",
+        type=float,
+        default=None,
+    )
+
+    log.add_argument(
+        "--solo",
+        type=float,
+        default=None,
+    )
+
+    log.add_argument(
+        "--notes",
+        default="",
+    )
+
+    log.set_defaults(
+        func=cmd_log
+    )
+
+    status = sub.add_parser(
+        "status",
+        help="Show accumulated topic metrics.",
+    )
+
+    status.add_argument(
+        "topic_name",
+    )
+
+    status.set_defaults(
+        func=cmd_status
+    )
+
+    history = sub.add_parser(
+        "history",
+        help="Show recorded sessions for a topic.",
+    )
+
+    history.add_argument(
+        "topic_name",
+    )
+
+    history.set_defaults(
+        func=cmd_history
+    )
+
+    reference = sub.add_parser(
+        "reference",
+        help="Show framework formulas.",
+    )
+    add_topic(reference)
+    reference.set_defaults(
+        func=cmd_reference
+    )
+
+    growth = sub.add_parser(
+        "growth",
+        help="Calculate seven-rep capability growth.",
+    )
+    growth.add_argument(
+        "--baseline",
+        type=float,
+        default=1.0,
+    )
+    growth.add_argument(
+        "--reps",
+        type=float,
+        required=True,
+        help="Stable repetitions.",
+    )
+    add_topic(growth)
+    growth.set_defaults(
+        func=cmd_growth
+    )
+
+    target = sub.add_parser(
+        "target",
+        help="Calculate repetitions needed for target growth.",
+    )
+    target.add_argument(
+        "--growth",
+        type=float,
+        required=True,
+    )
+    target.add_argument(
+        "--per-day",
+        type=float,
+        default=None,
+    )
+    add_topic(target)
+    target.set_defaults(
+        func=cmd_target
+    )
+
+    retention = sub.add_parser(
+        "retention",
+        help="Calculate stable reps and leakage.",
+    )
+    retention.add_argument(
+        "--reps",
+        type=float,
+        required=True,
+    )
+    retention.add_argument(
+        "--rate",
+        type=float,
+        required=True,
+        help="Retention rate from 0 to 1.",
+    )
+    retention.add_argument(
+        "--baseline",
+        type=float,
+        default=1.0,
+    )
+    add_topic(retention)
+    retention.set_defaults(
+        func=cmd_retention
+    )
+
+    approach = sub.add_parser(
+        "approach",
+        help="Calculate IAM approach quality.",
+    )
+    approach.add_argument(
+        "--clarity",
+        type=float,
+        required=True,
+    )
+    approach.add_argument(
+        "--relevance",
+        type=float,
+        required=True,
+    )
+    approach.add_argument(
+        "--integration",
+        type=float,
+        required=True,
+    )
+    approach.add_argument(
+        "--stability",
+        type=float,
+        required=True,
+    )
+    add_topic(approach)
+    approach.set_defaults(
+        func=cmd_approach
+    )
+
+    learning = sub.add_parser(
+        "learning",
+        help="Calculate Learning and Refresh Units.",
+    )
+    learning.add_argument(
+        "--happened",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--why",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--connection",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--learning-units",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--new",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--old",
+        type=float,
+        default=1,
+    )
+    learning.add_argument(
+        "--connections",
+        type=float,
+        default=1,
+    )
+    add_topic(learning)
+    learning.set_defaults(
+        func=cmd_learning
+    )
+
+    mass = sub.add_parser(
+        "mass",
+        help="Calculate Information Mass and density.",
+    )
+    mass.add_argument(
+        "--bits",
+        type=float,
+        required=True,
+    )
+    mass.add_argument(
+        "--relationships",
+        type=float,
+        required=True,
+    )
+    mass.add_argument(
+        "--anti-mass",
+        type=float,
+        default=0.0,
+    )
+    add_topic(mass)
+    mass.set_defaults(
+        func=cmd_mass
+    )
+
+    capability = sub.add_parser(
+        "capability",
+        help="Calculate capability gap, independence and readiness.",
+    )
+    capability.add_argument(
+        "--baseline",
+        type=float,
+        required=True,
+    )
+    capability.add_argument(
+        "--target",
+        type=float,
+        required=True,
+    )
+    capability.add_argument(
+        "--solo",
+        type=float,
+        required=True,
+    )
+    capability.add_argument(
+        "--assisted",
+        type=float,
+        required=True,
+    )
+    capability.add_argument(
+        "--capability",
+        type=float,
+        required=True,
+    )
+    capability.add_argument(
+        "--stability",
+        type=float,
+        required=True,
+    )
+    add_topic(capability)
+    capability.set_defaults(
+        func=cmd_capability
+    )
+
+    focus = sub.add_parser(
+        "focus",
+        help="Calculate entropy and effective progress.",
+    )
+    focus.add_argument(
+        "--active",
+        type=float,
+        required=True,
+    )
+    focus.add_argument(
+        "--progress",
+        type=float,
+        required=True,
+    )
+    focus.add_argument(
+        "--wpm",
+        type=float,
+        default=None,
+    )
+    focus.add_argument(
+        "--error-penalty",
+        type=float,
+        default=0.0,
+    )
+    add_topic(focus)
+    focus.set_defaults(
+        func=cmd_focus
+    )
+
+    return parser
+
+
+def main():
+    parser = build_parser()
+
+    args = parser.parse_args()
+
+    if not args.command:
+        args = parser.parse_args(
+            ["reference"]
+        )
+
+    try:
+        result = args.func(
+            args
+        )
+
+        if isinstance(
+            result,
+            int,
+        ):
+            return result
+
+        return 0
+
+    except ValueError as exc:
+        parser.error(
+            str(exc)
+        )
+
+
+if __name__ == "__main__":
+    raise SystemExit(
+        main()
+    )

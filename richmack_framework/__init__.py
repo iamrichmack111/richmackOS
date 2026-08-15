@@ -1,0 +1,107 @@
+"""
+Richmack Framework Engine.
+
+Mathematical implementation of the Richmack Improvement Formula,
+Ieramayu Approach Method, Learning/Refresh Units, Information Mass,
+Richmack Capability Assessment, and planning formulas.
+"""
+
+from .formulas import (
+    adjusted_wpm,
+    approach_score,
+    approach_total,
+    capability_gap,
+    days_for_growth,
+    effective_progress,
+    entropy_cost,
+    generic_growth,
+    growth_from_raw_reps,
+    growth_from_stable_reps,
+    growth_multiplier,
+    independence,
+    information_density,
+    information_mass,
+    learning_unit_components,
+    learning_unit_strict,
+    leakage,
+    leakage_from_rate,
+    net_information_mass,
+    per_rep_improvement,
+    readiness,
+    refresh_unit,
+    refresh_unit_connected,
+    raw_reps_for_stable,
+    stable_reps,
+    stable_reps_for_growth,
+    target_multiplier,
+    seven_rep_growth,
+)
+
+__all__ = [
+    "adjusted_wpm",
+    "approach_score",
+    "approach_total",
+    "capability_gap",
+    "days_for_growth",
+    "effective_progress",
+    "entropy_cost",
+    "generic_growth",
+    "growth_from_raw_reps",
+    "growth_from_stable_reps",
+    "growth_multiplier",
+    "independence",
+    "information_density",
+    "information_mass",
+    "learning_unit_components",
+    "learning_unit_strict",
+    "leakage",
+    "leakage_from_rate",
+    "net_information_mass",
+    "per_rep_improvement",
+    "readiness",
+    "refresh_unit",
+    "refresh_unit_connected",
+    "raw_reps_for_stable",
+    "stable_reps",
+    "stable_reps_for_growth",
+    "target_multiplier",
+    "seven_rep_growth",
+]
+
+from .database import (
+    DEFAULT_DB,
+    add_session,
+    add_topic,
+    get_topic,
+    initialize,
+    list_topics,
+    topic_sessions,
+)
+
+from .tracker import (
+    topic_summary,
+)
+
+from .ai import (
+    DEFAULT_MODEL,
+    DEFAULT_OLLAMA_URL,
+    FrameworkAIContext,
+    ask_framework,
+    build_framework_context_text,
+    build_system_prompt,
+    build_user_prompt,
+    load_framework_context,
+    ollama_chat,
+)
+
+from .knowledge import (
+    add_concept,
+    add_mistake,
+    add_note,
+    add_question,
+    add_relation,
+    initialize_knowledge,
+    knowledge_summary,
+    list_concepts,
+    set_confidence,
+)
