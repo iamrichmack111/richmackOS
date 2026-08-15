@@ -81,3 +81,27 @@ from .database import (
 from .tracker import (
     topic_summary,
 )
+
+from .ai import (
+    DEFAULT_MODEL,
+    DEFAULT_OLLAMA_URL,
+    FrameworkAIContext,
+    ask_framework,
+    build_framework_context_text,
+    build_system_prompt,
+    build_user_prompt,
+    load_framework_context,
+    ollama_chat,
+)
+
+from .knowledge import (
+    add_concept,
+    add_mistake,
+    add_note,
+    add_question,
+    add_relation,
+    initialize_knowledge,
+    knowledge_summary,
+    list_concepts,
+    set_confidence,
+)

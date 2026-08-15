@@ -259,3 +259,25 @@ class FrameworkCLITests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FrameworkAskCLITests(unittest.TestCase):
+    def test_ask_help_exists(self):
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(CLI),
+                "ask",
+                "--help",
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(
+            "personal AI tutor",
+            result.stdout,
+        )
+        self.assertIn("--model", result.stdout)

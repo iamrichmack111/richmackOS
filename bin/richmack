@@ -5,6 +5,23 @@ ROOT="$(
     pwd
 )"
 
+
+# Global RichmackOS Ollama backend.
+#
+# Priority:
+#   1. RICHMACK_OLLAMA_HOST
+#   2. OLLAMA_HOST
+#   3. RichmackOS default
+if [ -n "${RICHMACK_OLLAMA_HOST:-}" ]; then
+    :
+elif [ -n "${OLLAMA_HOST:-}" ]; then
+    RICHMACK_OLLAMA_HOST="$OLLAMA_HOST"
+else
+    RICHMACK_OLLAMA_HOST="http://richmack.local:11434"
+fi
+
+export RICHMACK_OLLAMA_HOST
+
 # RICHMACK_METRICS_COMMAND
 if [ "${1:-}" = "metrics" ]; then
     shift

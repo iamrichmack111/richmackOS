@@ -28,6 +28,24 @@ from richmack_framework.tracker import (
 )
 
 
+from richmack_framework.knowledge import (
+    add_concept as knowledge_add_concept,
+    add_mistake as knowledge_add_mistake,
+    add_note as knowledge_add_note,
+    add_question as knowledge_add_question,
+    add_relation as knowledge_add_relation,
+    knowledge_summary,
+    list_concepts as knowledge_list_concepts,
+    set_confidence as knowledge_set_confidence,
+)
+
+
+from richmack_framework.ai import (
+    DEFAULT_MODEL,
+    ask_framework,
+)
+
+
 from richmack_ui import (
     BOLD,
     CYAN,
@@ -533,6 +551,422 @@ def cmd_focus(
 
 
 
+
+def cmd_ask(
+    args,
+):
+    heading(
+        "Richmack Personal Tutor",
+        args.topic_name,
+    )
+
+    print_info(f"Model: {args.model}")
+    print_info(
+        "Loading Richmack Framework learning profile"
+    )
+
+    try:
+        answer, context = ask_framework(
+            args.topic_name,
+            args.question,
+            model=args.model,
+            history_limit=args.history_limit,
+            timeout=args.timeout,
+        )
+    except (
+        ValueError,
+        RuntimeError,
+    ) as exc:
+        print_error(str(exc))
+        return 1
+
+    print()
+    print(
+        panel(
+            "RICHMACK AI",
+            subtitle=f"{context.topic} personal tutor",
+            ansi=MAGENTA,
+        )
+    )
+    print()
+    print_ai(answer)
+    print()
+
+    summary = context.summary
+
+    print(
+        color(
+            "Framework context used:",
+            CYAN,
+        )
+    )
+    print(f"  Sessions: {summary['sessions']}")
+    print(f"  Stable reps: {summary['stable_reps']:.2f}")
+    print(f"  Retention: {summary['retention'] * 100:.2f}%")
+    print(f"  Learning Units: {summary['learning_units']:.2f}")
+    print(f"  Connections: {summary['connections']:.2f}")
+    print()
+
+    return 0
+
+
+
+def cmd_knowledge_concept_add(
+    args,
+):
+    concept_id = knowledge_add_concept(
+        args.topic_name,
+        args.concept,
+        description=args.description,
+    )
+
+    heading(
+        "Concept Added",
+        args.topic_name,
+    )
+
+    print_success(
+        f"Concept #{concept_id}: "
+        f"{args.concept}"
+    )
+
+    print()
+
+    return 0
+
+
+def cmd_knowledge_concept_list(
+    args,
+):
+    rows = knowledge_list_concepts(
+        args.topic_name
+    )
+
+    heading(
+        "Knowledge Concepts",
+        args.topic_name,
+    )
+
+    if not rows:
+        print_warning(
+            "No concepts recorded."
+        )
+
+        print()
+        return 0
+
+    for row in rows:
+        confidence = row[
+            "confidence"
+        ]
+
+        if confidence is None:
+            confidence_text = (
+                "not recorded"
+            )
+        else:
+            confidence_text = (
+                f"{float(confidence) * 100:.1f}%"
+            )
+
+        print(
+            f"• {row['name']}"
+        )
+
+        if row["description"]:
+            print(
+                f"    {row['description']}"
+            )
+
+        print(
+            f"    confidence: "
+            f"{confidence_text}"
+        )
+
+    print()
+
+    return 0
+
+
+def _print_knowledge_record(
+    title,
+    topic,
+    record_id,
+):
+    heading(
+        title,
+        topic,
+    )
+
+    print_success(
+        f"Stored record #{record_id}"
+    )
+
+    print()
+
+
+def cmd_knowledge_note(
+    args,
+):
+    record_id = knowledge_add_note(
+        args.topic_name,
+        args.text,
+        concept_name=args.concept,
+    )
+
+    _print_knowledge_record(
+        "Knowledge Note Added",
+        args.topic_name,
+        record_id,
+    )
+
+    return 0
+
+
+def cmd_knowledge_mistake(
+    args,
+):
+    record_id = knowledge_add_mistake(
+        args.topic_name,
+        args.text,
+        concept_name=args.concept,
+    )
+
+    _print_knowledge_record(
+        "Mistake Recorded",
+        args.topic_name,
+        record_id,
+    )
+
+    return 0
+
+
+def cmd_knowledge_question(
+    args,
+):
+    record_id = knowledge_add_question(
+        args.topic_name,
+        args.text,
+        concept_name=args.concept,
+    )
+
+    _print_knowledge_record(
+        "Question Recorded",
+        args.topic_name,
+        record_id,
+    )
+
+    return 0
+
+
+def cmd_knowledge_confidence(
+    args,
+):
+    record_id = knowledge_set_confidence(
+        args.topic_name,
+        args.concept,
+        args.score,
+        source=args.source,
+    )
+
+    heading(
+        "Concept Confidence Updated",
+        args.topic_name,
+    )
+
+    print_success(
+        f"{args.concept}: "
+        f"{args.score * 100:.1f}%"
+    )
+
+    print(
+        f"Confidence record ID:   "
+        f"{record_id}"
+    )
+
+    print()
+
+    return 0
+
+
+def cmd_knowledge_relate(
+    args,
+):
+    record_id = knowledge_add_relation(
+        args.topic_name,
+        args.concept_a,
+        args.concept_b,
+        relation=args.relation,
+        strength=args.strength,
+    )
+
+    heading(
+        "Knowledge Connection Added",
+        args.topic_name,
+    )
+
+    print_success(
+        f"{args.concept_a} "
+        f"--{args.relation}--> "
+        f"{args.concept_b}"
+    )
+
+    print(
+        f"Strength:               "
+        f"{args.strength:.2f}"
+    )
+
+    print(
+        f"Relationship ID:        "
+        f"{record_id}"
+    )
+
+    print()
+
+    return 0
+
+
+def cmd_knowledge_show(
+    args,
+):
+    result = knowledge_summary(
+        args.topic_name
+    )
+
+    heading(
+        "Knowledge Map",
+        args.topic_name,
+    )
+
+    print(
+        color(
+            "Concepts",
+            CYAN,
+        )
+    )
+
+    concepts = result[
+        "concepts"
+    ]
+
+    if not concepts:
+        print(
+            "  None recorded."
+        )
+
+    for item in concepts:
+        confidence = item.get(
+            "confidence"
+        )
+
+        if confidence is None:
+            confidence_text = "?"
+        else:
+            confidence_text = (
+                f"{float(confidence) * 100:.0f}%"
+            )
+
+        print(
+            f"  • {item['name']} "
+            f"[{confidence_text}]"
+        )
+
+        description = (
+            item.get(
+                "description"
+            )
+            or ""
+        ).strip()
+
+        if description:
+            print(
+                f"      {description}"
+            )
+
+    groups = (
+        (
+            "Notes",
+            "notes",
+        ),
+        (
+            "Mistakes",
+            "mistakes",
+        ),
+        (
+            "Questions",
+            "questions",
+        ),
+    )
+
+    for title, key in groups:
+        print()
+
+        print(
+            color(
+                title,
+                CYAN,
+            )
+        )
+
+        rows = result[
+            key
+        ]
+
+        if not rows:
+            print(
+                "  None recorded."
+            )
+
+        for item in rows[:25]:
+            concept = (
+                item.get(
+                    "concept"
+                )
+                or ""
+            ).strip()
+
+            prefix = (
+                f"[{concept}] "
+                if concept
+                else ""
+            )
+
+            print(
+                f"  • {prefix}"
+                f"{item['body']}"
+            )
+
+    print()
+
+    print(
+        color(
+            "Relationships",
+            CYAN,
+        )
+    )
+
+    relations = result[
+        "relations"
+    ]
+
+    if not relations:
+        print(
+            "  None recorded."
+        )
+
+    for item in relations[:25]:
+        print(
+            f"  • {item['concept_a']} "
+            f"--{item['relation']}--> "
+            f"{item['concept_b']} "
+            f"[{float(item['strength']):.2f}]"
+        )
+
+    print()
+
+    return 0
+
+
 def cmd_topic_add(
     args,
 ):
@@ -791,6 +1225,250 @@ def build_parser():
 
     sub = parser.add_subparsers(
         dest="command",
+    )
+
+    ask = sub.add_parser(
+        "ask",
+        help=(
+            "Ask the personal AI tutor a question "
+            "grounded in tracked learning history."
+        ),
+        description=(
+            "Ask the Richmack personal AI tutor a question "
+            "grounded in your tracked learning history."
+        ),
+    )
+
+    ask.add_argument(
+        "topic_name",
+        help="Tracked topic name.",
+    )
+
+    ask.add_argument(
+        "--question",
+        "-q",
+        required=True,
+        help="Question for the personal tutor.",
+    )
+
+    ask.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help=(
+            "Ollama model. "
+            f"Default: {DEFAULT_MODEL}"
+        ),
+    )
+
+    ask.add_argument(
+        "--history-limit",
+        type=int,
+        default=12,
+    )
+
+    ask.add_argument(
+        "--timeout",
+        type=float,
+        default=600.0,
+    )
+
+    ask.set_defaults(
+        func=cmd_ask
+    )
+
+    knowledge = sub.add_parser(
+        "knowledge",
+        help=(
+            "Manage structured personal "
+            "knowledge for a topic."
+        ),
+        description=(
+            "Store concepts, notes, mistakes, "
+            "questions, confidence scores, "
+            "and relationships."
+        ),
+    )
+
+    knowledge_sub = knowledge.add_subparsers(
+        dest="knowledge_command",
+        required=True,
+    )
+
+    concept_add = knowledge_sub.add_parser(
+        "concept-add",
+        help="Add a concept.",
+    )
+
+    concept_add.add_argument(
+        "topic_name",
+    )
+
+    concept_add.add_argument(
+        "concept",
+    )
+
+    concept_add.add_argument(
+        "--description",
+        default="",
+    )
+
+    concept_add.set_defaults(
+        func=cmd_knowledge_concept_add
+    )
+
+    concept_list = knowledge_sub.add_parser(
+        "concept-list",
+        help="List concepts.",
+    )
+
+    concept_list.add_argument(
+        "topic_name",
+    )
+
+    concept_list.set_defaults(
+        func=cmd_knowledge_concept_list
+    )
+
+    note = knowledge_sub.add_parser(
+        "note",
+        help="Store a knowledge note.",
+    )
+
+    note.add_argument(
+        "topic_name",
+    )
+
+    note.add_argument(
+        "--text",
+        required=True,
+    )
+
+    note.add_argument(
+        "--concept",
+        default=None,
+    )
+
+    note.set_defaults(
+        func=cmd_knowledge_note
+    )
+
+    mistake = knowledge_sub.add_parser(
+        "mistake",
+        help="Record a mistake.",
+    )
+
+    mistake.add_argument(
+        "topic_name",
+    )
+
+    mistake.add_argument(
+        "--text",
+        required=True,
+    )
+
+    mistake.add_argument(
+        "--concept",
+        default=None,
+    )
+
+    mistake.set_defaults(
+        func=cmd_knowledge_mistake
+    )
+
+    question = knowledge_sub.add_parser(
+        "question",
+        help="Record an open question.",
+    )
+
+    question.add_argument(
+        "topic_name",
+    )
+
+    question.add_argument(
+        "--text",
+        required=True,
+    )
+
+    question.add_argument(
+        "--concept",
+        default=None,
+    )
+
+    question.set_defaults(
+        func=cmd_knowledge_question
+    )
+
+    confidence = knowledge_sub.add_parser(
+        "confidence",
+        help="Set confidence for a concept.",
+    )
+
+    confidence.add_argument(
+        "topic_name",
+    )
+
+    confidence.add_argument(
+        "concept",
+    )
+
+    confidence.add_argument(
+        "score",
+        type=float,
+        help="Confidence from 0.0 to 1.0.",
+    )
+
+    confidence.add_argument(
+        "--source",
+        default="manual",
+    )
+
+    confidence.set_defaults(
+        func=cmd_knowledge_confidence
+    )
+
+    relate = knowledge_sub.add_parser(
+        "relate",
+        help="Connect two concepts.",
+    )
+
+    relate.add_argument(
+        "topic_name",
+    )
+
+    relate.add_argument(
+        "concept_a",
+    )
+
+    relate.add_argument(
+        "concept_b",
+    )
+
+    relate.add_argument(
+        "--relation",
+        default="related",
+    )
+
+    relate.add_argument(
+        "--strength",
+        type=float,
+        default=1.0,
+    )
+
+    relate.set_defaults(
+        func=cmd_knowledge_relate
+    )
+
+    show = knowledge_sub.add_parser(
+        "show",
+        help="Show the knowledge map.",
+    )
+
+    show.add_argument(
+        "topic_name",
+    )
+
+    show.set_defaults(
+        func=cmd_knowledge_show
     )
 
     topic = sub.add_parser(
@@ -1186,9 +1864,17 @@ def main():
         )
 
     try:
-        args.func(
+        result = args.func(
             args
         )
+
+        if isinstance(
+            result,
+            int,
+        ):
+            return result
+
+        return 0
 
     except ValueError as exc:
         parser.error(
@@ -1197,4 +1883,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(
+        main()
+    )
